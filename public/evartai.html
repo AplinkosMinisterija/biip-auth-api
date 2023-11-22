@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta charset="utf-8" />
+
+    <style>
+      html,
+      body,
+      div,
+      span,
+      applet,
+      object,
+      iframe,
+      h1,
+      h2,
+      h3,
+      h4,
+      h5,
+      h6,
+      p,
+      blockquote,
+      pre,
+      a,
+      abbr,
+      acronym,
+      address,
+      big,
+      cite,
+      code,
+      del,
+      dfn,
+      em,
+      img,
+      ins,
+      kbd,
+      q,
+      s,
+      samp,
+      small,
+      strike,
+      strong,
+      sub,
+      sup,
+      tt,
+      var,
+      b,
+      u,
+      i,
+      center,
+      dl,
+      dt,
+      dd,
+      ol,
+      ul,
+      li,
+      fieldset,
+      form,
+      label,
+      legend,
+      table,
+      caption,
+      tbody,
+      tfoot,
+      thead,
+      tr,
+      th,
+      td,
+      article,
+      aside,
+      canvas,
+      details,
+      embed,
+      figure,
+      figcaption,
+      footer,
+      header,
+      hgroup,
+      menu,
+      nav,
+      output,
+      ruby,
+      section,
+      summary,
+      time,
+      mark,
+      audio,
+      video {
+        margin: 0;
+        padding: 0;
+        border: 0;
+        font-size: 100%;
+        font: inherit;
+        vertical-align: baseline;
+      }
+      /* HTML5 display-role reset for older browsers */
+      article,
+      aside,
+      details,
+      figcaption,
+      figure,
+      footer,
+      header,
+      hgroup,
+      menu,
+      nav,
+      section {
+        display: block;
+      }
+      body {
+        line-height: 1;
+      }
+      ol,
+      ul {
+        list-style: none;
+      }
+      blockquote,
+      q {
+        quotes: none;
+      }
+      blockquote:before,
+      blockquote:after,
+      q:before,
+      q:after {
+        content: '';
+        content: none;
+      }
+      table {
+        border-collapse: collapse;
+        border-spacing: 0;
+      }
+      html,
+      body {
+        background-color: #004650;
+        height: 100%;
+      }
+
+      .medziokle {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .medziokle a#btn {
+        color: white;
+        background: #f89572;
+        padding: 8px 24px;
+        border-radius: 4px;
+        margin: 20px;
+        text-decoration: none;
+        font-weight: bold;
+        font-family: Arial;
+        font-size: 16px;
+      }
+    </style>
+
+    <script>
+      function getUrl() {
+        var params = new URLSearchParams(window.location.search);
+
+        if (params.has('ticket')) {
+          return 'medziokle://login?ticket=' + params.get('ticket');
+        }
+
+        return false;
+      }
+
+      function returnApp() {
+        const url = getUrl() || 'https://biip.lt';
+
+        window.location = url;
+
+        const btn = document.getElementById('btn');
+        const logobtn = document.getElementById('logobtn');
+
+        btn.style.display = 'none';
+        logobtn.href = 'https://biip.lt';
+
+        return false;
+      }
+
+      window.onload = function () {
+        // Android can redirect to deeplink easily
+        if (/android/i.test(navigator.userAgent)) {
+          return returnApp();
+        }
+
+        // For iOS it's better to show button for user to click
+        const url = getUrl();
+        if (url) {
+          const btn = document.getElementById('btn');
+          const logobtn = document.getElementById('logobtn');
+          btn.href = url;
+          logobtn.href = url;
+          btn.style.display = 'block';
+        }
+      };
+    </script>
+  </head>
+  <body>
+    <div class="medziokle">
+      <a href="https://biip.lt" id="logobtn">
+        <img src="https://s3.biip.lt/biip-wp/app/uploads/2021/09/logo.svg" width="81" height="49" />
+      </a>
+
+      <a href="#" onclick="return returnApp()" style="display: none" id="btn"
+        >Grįžti į programėlę</a
+      >
+    </div>
+  </body>
+</html>

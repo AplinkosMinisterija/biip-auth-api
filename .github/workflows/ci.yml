@@ -1,0 +1,104 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # eslint:
+  #   name: ESLint
+  #   runs-on: ubuntu-latest
+  #   timeout-minutes: 15
+  #   permissions:
+  #     security-events: write
+  #     actions: read
+  #     contents: read
+
+  #   steps:
+  #     - uses: actions/checkout@v3
+
+  #     - name: Set up Node
+  #       uses: actions/setup-node@v3
+  #       with:
+  #         node-version-file: package.json
+  #         cache: yarn
+
+  #     - name: Install dependencies
+  #       run: yarn install --immutable --immutable-cache --check-cache
+
+  #     - name: Run ESLint
+  #       run: yarn run lint:sarif
+  #       continue-on-error: true
+
+  #     - name: Upload ESLint analysis results to GitHub
+  #       uses: github/codeql-action/upload-sarif@v2
+  #       with:
+  #         sarif_file: eslint-results.sarif
+  #         wait-for-processing: true
+  #         category: ESLint
+
+  validate:
+    name: Validate node application
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgis/postgis:14-master
+        ports: ['5436:5432']
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: auth
+          TZ: 'Etc/GMT'
+          PGTZ: 'Etc/GMT'
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 30
+
+      redis:
+        image: redis:7
+        ports: ['6671:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Node
+        uses: actions/setup-node@v3
+        with:
+          node-version-file: package.json
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --immutable --immutable-cache --check-cache
+
+      - name: Build
+        run: yarn build
+
+      - name: Test
+        run: yarn test
+
+  validate-docker-build:
+    name: Validate if docker image builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Build & tag docker image
+        uses: AplinkosMinisterija/reusable-workflows/.github/actions/docker-build-tag-push@main
+        with:
+          environment: test
+          push: false
