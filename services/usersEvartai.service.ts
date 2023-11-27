@@ -131,7 +131,7 @@ export default class UsersEvartaiService extends moleculer.Service {
       const companyApps: Array<string | number> = (company && (company.apps as any)) || [];
 
       if (!companyApps.includes(Number(appId))) {
-        throwNotFoundError('Company not found');
+        throwNotFoundError('Company not found', { apps: companyApps });
       }
     }
 
@@ -550,7 +550,7 @@ export default class UsersEvartaiService extends moleculer.Service {
     );
     if (!group && !createIfNotExists) {
       throwNotFoundError('Group not found');
-    } else if (createIfNotExists) {
+    } else if (createIfNotExists && !group) {
       const group: Group = await this.broker.call('groups.create', {
         name: companyName,
         companyEmail,
@@ -562,10 +562,19 @@ export default class UsersEvartaiService extends moleculer.Service {
         await this.broker.call('groups.toggleApp', {
           id: group.id,
           appId,
+          append: true,
         });
       }
 
-      return group;
+      return this.broker.call('groups.resolve', { id: group.id });
+    }
+
+    if (appId) {
+      await this.broker.call('groups.toggleApp', {
+        id: group.id,
+        appId,
+        append: true,
+      });
     }
 
     return this.broker.call('groups.update', {
