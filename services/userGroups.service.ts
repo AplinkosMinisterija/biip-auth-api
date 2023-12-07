@@ -1,7 +1,7 @@
 'use strict';
 
 import moleculer, { Context } from 'moleculer';
-import { Action, Method, Service } from 'moleculer-decorators';
+import { Action, Service } from 'moleculer-decorators';
 
 import { AppAuthMeta, UserAuthMeta } from './api.service';
 import DbConnection from '../mixins/database.mixin';

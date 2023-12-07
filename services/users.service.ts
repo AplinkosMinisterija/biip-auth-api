@@ -335,8 +335,8 @@ export default class UsersService extends moleculer.Service {
       },
     },
   })
-  async toggleApps(ctx: Context<{ id: number; appsIds: number[] | string[]; append: boolean }>) {
-    const { id, appsIds, append } = ctx.params;
+  async toggleApps(ctx: Context<{ id: number; appsIds: number[] | string[] }>) {
+    const { id, appsIds } = ctx.params;
     const user: User = await ctx.call('users.resolve', { id });
 
     const userApps: number[] = (user.apps as number[]) || [];
