@@ -314,7 +314,7 @@ export default class UsersLocalService extends moleculer.Service {
         return { ...user, url };
       }
 
-      await sendUserInvitationEmail(user.email, url, meta.user, app.settings?.productNameTo);
+      await sendUserInvitationEmail(user.email, url, meta?.user, app.settings?.productNameTo);
     }
 
     return user;

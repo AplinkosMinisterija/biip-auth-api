@@ -19,18 +19,21 @@ export function emailCanBeSent() {
 export function sendUserInvitationEmail(
   email: string,
   invitationUrl: string,
-  inviter: User,
-  productName: string,
+  inviter?: User,
+  productName?: string,
 ) {
   if (!userInviteTemplateId) return;
+
+  const inviterName =
+    inviter?.firstName || inviter?.lastName ? `${inviter.firstName} ${inviter.lastName}` : '';
 
   return client?.sendEmailWithTemplate({
     From: sender,
     To: email.toLowerCase(),
     TemplateId: userInviteTemplateId,
     TemplateModel: {
-      invite_sender_name: `${inviter.firstName} ${inviter.lastName}`,
-      invite_sender_email: inviter.email,
+      invite_sender_name: inviterName,
+      invite_sender_email: inviter?.email || '',
       action_url: invitationUrl,
       product_name: productName,
     },
