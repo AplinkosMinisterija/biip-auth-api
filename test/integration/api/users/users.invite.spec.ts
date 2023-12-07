@@ -1,10 +1,7 @@
 'use strict';
 import { ServiceBroker } from 'moleculer';
-import { ApiHelper, errors, serviceBrokerConfig, testUpdatedData } from '../../../helpers/api';
+import { ApiHelper, errors, serviceBrokerConfig } from '../../../helpers/api';
 import { expect, describe, beforeAll, afterAll, it } from '@jest/globals';
-import { User, UserType } from '../../../../services/users.service';
-import { UserGroupRole } from '../../../../services/userGroups.service';
-import { Group } from '../../../../services/groups.service';
 
 const request = require('supertest');
 
