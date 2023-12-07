@@ -552,7 +552,14 @@ export default class PermissionsService extends moleculer.Service {
     rest: 'GET /municipalities',
   })
   async listMunicipalities() {
-    const host = process.env.QGIS_SERVER_HOST || 'https://gis.biip.lt';
+    const host = process.env.QGIS_SERVER_HOST;
+
+    if (!host) {
+      return {
+        rows: [],
+        total: 0,
+      };
+    }
 
     const searchParams = new URLSearchParams({
       SERVICE: 'WFS',

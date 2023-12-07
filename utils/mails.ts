@@ -6,7 +6,11 @@ if (process.env.POSTMARK_KEY) {
   client = new ServerClient(process.env.POSTMARK_KEY);
 }
 
-const sender = 'noreply@biip.lt';
+const sender = process.env.POSTMARK_SENDER || 'noreply@biip.lt';
+const adminInviteTemplateId = Number(process.env.POSTMARK_ADMIN_INVITE_TEMPLATE_ID);
+const evartaiInviteTemplateId = Number(process.env.POSTMARK_EVARTAI_INVITE_TEMPLATE_ID);
+const evartaiInviteTemplateIdApp = Number(process.env.POSTMARK_EVARTAI_INVITE_TEMPLATE_ID_APP);
+const passwordResetTemplateId = Number(process.env.POSTMARK_PASSWORD_RESET_TEMPLATE_ID);
 
 export function emailCanBeSent() {
   return ['production', 'staging'].includes(process.env.NODE_ENV);
@@ -18,10 +22,12 @@ export function sendAdminInvitationEmail(
   inviter: User,
   productName: string,
 ) {
+  if (!adminInviteTemplateId) return;
+
   return client?.sendEmailWithTemplate({
     From: sender,
     To: email.toLowerCase(),
-    TemplateId: 28120959,
+    TemplateId: adminInviteTemplateId,
     TemplateModel: {
       invite_sender_name: `${inviter.firstName} ${inviter.lastName}`,
       invite_sender_email: inviter.email,
@@ -40,10 +46,17 @@ export function sendEvartaiInvitationEmail(
   inviteType: string,
   isApp: boolean = false,
 ) {
+  let templateId = evartaiInviteTemplateId;
+  if (isApp && evartaiInviteTemplateIdApp) {
+    templateId = evartaiInviteTemplateIdApp;
+  }
+
+  if (!templateId) return;
+
   return client?.sendEmailWithTemplate({
     From: sender,
     To: email.toLowerCase(),
-    TemplateId: isApp ? 28847502 : 28317472,
+    TemplateId: templateId,
     TemplateModel: {
       invite_sender_name: inviterName,
       invite_sender_email: inviterEmail,
@@ -55,10 +68,12 @@ export function sendEvartaiInvitationEmail(
 }
 
 export function sendResetPasswordEmail(email: string, user: User, resetUrl: string) {
+  if (!passwordResetTemplateId) return;
+
   return client?.sendEmailWithTemplate({
     From: sender,
     To: email.toLowerCase(),
-    TemplateId: 28121641,
+    TemplateId: passwordResetTemplateId,
     TemplateModel: {
       name: user.firstName,
       user_email: user.email,
