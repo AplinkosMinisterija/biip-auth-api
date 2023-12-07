@@ -1,4 +1,3 @@
-// const postmark = require("postmark");
 import { ServerClient } from 'postmark';
 import { User } from '../services/users.service';
 let client: ServerClient;
