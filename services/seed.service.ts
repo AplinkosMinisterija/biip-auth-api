@@ -20,6 +20,15 @@ export default class SeedService extends moleculer.Service {
         productNameTo: 'BĮIP administravimo sistemos',
       },
     });
+    
+    await ctx.call('apps.create', {
+      name: 'Vidiniai naudotojai',
+      type: AppType.USERS,
+      url: 'https://admin.biip.lt',
+      settings: {
+        productNameTo: 'BĮĮP naudotojų valdymo sistemos',
+      },
+    });
 
     // create local user
     await ctx.call('usersLocal.invite', {

@@ -134,7 +134,7 @@ export class ApiHelper {
     });
     this.appFishing = await this.broker.call('apps.create', {
       name: 'FishingTest',
-      type: AppType.FISHING,
+      type: 'FISHING',
       url: faker.internet.url(),
       settings: {
         productNameTo: faker.lorem.word(2),
@@ -142,7 +142,7 @@ export class ApiHelper {
     });
     this.appHunting = await this.broker.call('apps.create', {
       name: 'HuntingTest',
-      type: AppType.HUNTING,
+      type: 'HUNTING',
       url: faker.internet.url(),
       settings: {
         productNameTo: faker.lorem.word(2),

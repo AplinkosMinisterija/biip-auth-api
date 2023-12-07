@@ -2,7 +2,7 @@
 
 import moleculer, { Context } from 'moleculer';
 import { Action, Method, Service } from 'moleculer-decorators';
-import { App, AppType, UsersAppAccesses } from './apps.service';
+import { App, UsersAppAccesses } from './apps.service';
 import { Group } from './groups.service';
 import { UserGroup, UserGroupRole } from './userGroups.service';
 import { User, UserType } from './users.service';
