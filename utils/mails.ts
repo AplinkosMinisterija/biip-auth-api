@@ -7,7 +7,7 @@ if (process.env.POSTMARK_KEY) {
 }
 
 const sender = process.env.POSTMARK_SENDER || 'noreply@biip.lt';
-const adminInviteTemplateId = Number(process.env.POSTMARK_ADMIN_INVITE_TEMPLATE_ID);
+const userInviteTemplateId = Number(process.env.POSTMARK_USER_INVITE_TEMPLATE_ID);
 const evartaiInviteTemplateId = Number(process.env.POSTMARK_EVARTAI_INVITE_TEMPLATE_ID);
 const evartaiInviteTemplateIdApp = Number(process.env.POSTMARK_EVARTAI_INVITE_TEMPLATE_ID_APP);
 const passwordResetTemplateId = Number(process.env.POSTMARK_PASSWORD_RESET_TEMPLATE_ID);
@@ -16,18 +16,18 @@ export function emailCanBeSent() {
   return ['production', 'staging'].includes(process.env.NODE_ENV);
 }
 
-export function sendAdminInvitationEmail(
+export function sendUserInvitationEmail(
   email: string,
   invitationUrl: string,
   inviter: User,
   productName: string,
 ) {
-  if (!adminInviteTemplateId) return;
+  if (!userInviteTemplateId) return;
 
   return client?.sendEmailWithTemplate({
     From: sender,
     To: email.toLowerCase(),
-    TemplateId: adminInviteTemplateId,
+    TemplateId: userInviteTemplateId,
     TemplateModel: {
       invite_sender_name: `${inviter.firstName} ${inviter.lastName}`,
       invite_sender_email: inviter.email,
