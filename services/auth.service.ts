@@ -11,7 +11,6 @@ import {
   generateUUID,
   sendResetPasswordEmail,
   validateHashAndSignature,
-  verifyCaptcha,
   verifyToken,
 } from '../utils';
 import { AppAuthMeta, AuthStrategy, UserAuthMeta } from './api.service';
@@ -48,12 +47,7 @@ export default class AuthService extends moleculer.Service {
       AppAuthMeta
     >,
   ) {
-    const { email, password, refresh, captchaToken } = ctx.params;
-
-    const captchaValid = await verifyCaptcha(captchaToken);
-    if (!captchaValid && ctx.meta.app.isAdmin && false) {
-      return throwBadRequestError('Invalid captcha');
-    }
+    const { email, password, refresh } = ctx.params;
 
     const { userId: strategyId, id }: any = await ctx.call('usersLocal.validateLogin', {
       email: email.toLowerCase(),
@@ -354,13 +348,8 @@ export default class AuthService extends moleculer.Service {
       AppAuthMeta & UserAuthMeta
     >,
   ) {
-    let { email, captchaToken } = ctx.params;
+    let { email } = ctx.params;
     email = email.toLowerCase();
-
-    const captchaValid = await verifyCaptcha(captchaToken);
-    if (!captchaValid && ctx.meta.app.isAdmin && false) {
-      return throwNotFoundError('Invalid captcha.');
-    }
 
     const { id, userId }: any = await ctx.call('usersLocal.validateRemind', {
       email,
