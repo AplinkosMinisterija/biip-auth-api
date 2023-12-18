@@ -19,7 +19,7 @@ import {
   emailCanBeSent,
   generateHashAndSignatureQueryParams,
   generateUUID,
-  sendAdminInvitationEmail,
+  sendUserInvitationEmail,
 } from '../utils';
 import { AppAuthMeta, UserAuthMeta } from './api.service';
 import { App } from './apps.service';
@@ -314,7 +314,7 @@ export default class UsersLocalService extends moleculer.Service {
         return { ...user, url };
       }
 
-      await sendAdminInvitationEmail(user.email, url, meta.user, app.settings?.productNameTo);
+      await sendUserInvitationEmail(user.email, url, meta?.user, app.settings?.productNameTo);
     }
 
     return user;

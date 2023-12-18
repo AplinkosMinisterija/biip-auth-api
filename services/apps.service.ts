@@ -15,13 +15,10 @@ import {
 } from '../types';
 import { AppAuthMeta } from './api.service';
 
+// default app types
 export enum AppType {
-  FISH_STOCKING = 'FISH_STOCKING',
-  FISHING = 'FISHING',
-  HUNTING = 'HUNTING',
   ADMIN = 'ADMIN',
   USERS = 'USERS',
-  SPECIES = 'SPECIES',
 }
 
 export enum UsersAppAccesses {
@@ -31,7 +28,7 @@ export enum UsersAppAccesses {
 export interface App extends BaseModelInterface {
   name: string;
   apiKey: string;
-  type: AppType;
+  type: AppType & string;
   isAdmin: boolean;
   url: string;
   settings?: {
@@ -66,7 +63,6 @@ export interface App extends BaseModelInterface {
         type: 'string',
         required: true,
         immutable: true,
-        enum: Object.values(AppType),
         validate: 'validateType',
       },
 

@@ -1,16 +1,10 @@
 'use strict';
 
 import moleculer, { Context } from 'moleculer';
-import { Action, Method, Service } from 'moleculer-decorators';
+import { Action, Service } from 'moleculer-decorators';
 
 import DbConnection from '../mixins/database.mixin';
-import {
-  COMMON_FIELDS,
-  COMMON_DEFAULT_SCOPES,
-  COMMON_SCOPES,
-  FieldHookCallback,
-  BaseModelInterface,
-} from '../types';
+import { BaseModelInterface } from '../types';
 import { App } from './apps.service';
 import { Group } from './groups.service';
 export interface InheritedGroupApp extends BaseModelInterface {

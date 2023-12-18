@@ -16,12 +16,12 @@ import {
   throwNotFoundError,
 } from '../types';
 import { emailCanBeSent, sendEvartaiInvitationEmail } from '../utils';
-import { AppAuthMeta, UserAuthMeta, AuthStrategy } from './api.service';
+import { AppAuthMeta, UserAuthMeta } from './api.service';
 import { App } from './apps.service';
 import { Group } from './groups.service';
 import { UserGroup, UserGroupRole } from './userGroups.service';
 
-import { User, UserType } from './users.service';
+import { User } from './users.service';
 
 interface UserEvartaiHelper {
   firstName?: string;

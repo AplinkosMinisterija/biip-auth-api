@@ -406,23 +406,6 @@ export default class GroupsService extends moleculer.Service {
 
   @Action({
     params: {
-      userId: {
-        type: 'number',
-        convert: true,
-      },
-    },
-  })
-  async getTopLevelGroupIdsByUser(ctx: Context<{ userId: number }>) {
-    // ctx.params.userId
-    const user: User = await ctx.call('users.resolve', {
-      id: ctx.params.userId,
-    });
-    if (user.type === UserType.SUPER_ADMIN) false;
-    return false;
-  }
-
-  @Action({
-    params: {
       id: {
         type: 'number',
         convert: true,

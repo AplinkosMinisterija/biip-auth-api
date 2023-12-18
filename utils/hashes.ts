@@ -1,5 +1,3 @@
-import { stringify } from 'querystring';
-
 const crypto = require('crypto');
 
 export function generateUUID() {

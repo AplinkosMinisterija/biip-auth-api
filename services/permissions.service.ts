@@ -2,7 +2,7 @@
 
 import moleculer, { Context } from 'moleculer';
 import { Action, Method, Service } from 'moleculer-decorators';
-import { App, AppType, UsersAppAccesses } from './apps.service';
+import { App, UsersAppAccesses } from './apps.service';
 import { Group } from './groups.service';
 import { UserGroup, UserGroupRole } from './userGroups.service';
 import { User, UserType } from './users.service';
@@ -552,7 +552,14 @@ export default class PermissionsService extends moleculer.Service {
     rest: 'GET /municipalities',
   })
   async listMunicipalities() {
-    const host = process.env.QGIS_SERVER_HOST || 'https://gis.biip.lt';
+    const host = process.env.QGIS_SERVER_HOST;
+
+    if (!host) {
+      return {
+        rows: [],
+        total: 0,
+      };
+    }
 
     const searchParams = new URLSearchParams({
       SERVICE: 'WFS',
