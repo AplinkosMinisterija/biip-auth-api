@@ -85,6 +85,8 @@ jobs:
 
       - name: Test
         run: yarn test
+        env:
+          DB_CONNECTION: postgresql://postgres:postgres@localhost:5436/auth
 
   validate-docker-build:
     name: Validate if docker image builds

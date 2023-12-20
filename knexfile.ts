@@ -1,5 +1,6 @@
 const { knexSnakeCaseMappers } = require('objection');
-const path = require('path');
+require('dotenv').config();
+
 if (!process.env.DB_CONNECTION) {
   throw new Error('No database connection!');
 }
@@ -8,7 +9,7 @@ const config = {
   connection: process.env.DB_CONNECTION,
   migrations: {
     tableName: 'migrations',
-    directory: path.resolve('./database/migrations'),
+    directory: './database/migrations',
   },
   pool: { min: 0, max: 10 },
   ...knexSnakeCaseMappers(),
