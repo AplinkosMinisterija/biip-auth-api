@@ -36,10 +36,13 @@ describe('Test assigning groups to user', () => {
   beforeAll(() => initialize(broker));
   afterAll(() => broker.stop());
 
+  const groupToAssign1 = () => ({ id: apiHelper.groupAdminInner.id, role: UserGroupRole.ADMIN });
+  const groupToAssign2 = () => ({ id: apiHelper.groupAdminInner2.id, role: UserGroupRole.USER });
+
   afterEach(async () => {
     await broker.call('usersLocal.updateUser', {
       id: apiHelper.adminInner.id,
-      groups: [{ id: apiHelper.groupAdminInner.id, role: UserGroupRole.ADMIN }],
+      groups: [groupToAssign1()],
       apps: [],
     });
 
@@ -52,10 +55,7 @@ describe('Test assigning groups to user', () => {
 
   const endpoint = '/api/users';
   const groupsToAssign = () => {
-    return [
-      { id: apiHelper.groupAdminInner.id, role: UserGroupRole.ADMIN },
-      { id: apiHelper.groupAdminInner2.id, role: UserGroupRole.USER },
-    ];
+    return [groupToAssign1(), groupToAssign2()];
   };
 
   it('Assign groups for inner admin acting as admin (success)', async () => {
@@ -68,6 +68,33 @@ describe('Test assigning groups to user', () => {
       .expect(200)
       .expect(async (res: any) => {
         await checkGroups(apiHelper.adminInner.id, groupsToAssign());
+      });
+  });
+
+  it('Assign groups (with unassign) for inner admin acting as admin (success)', async () => {
+    return request(apiService.server)
+      .patch(`${endpoint}/${apiHelper.adminInner.id}`)
+      .set(apiHelper.getHeaders(apiHelper.adminToken))
+      .send({
+        groups: [groupToAssign2()],
+      })
+      .expect(200)
+      .expect(async (res: any) => {
+        await checkGroups(apiHelper.adminInner.id, [groupToAssign2()]);
+      });
+  });
+
+  it('Assign groups (without unassign) for inner admin acting as admin (success)', async () => {
+    return request(apiService.server)
+      .patch(`${endpoint}/${apiHelper.adminInner.id}`)
+      .set(apiHelper.getHeaders(apiHelper.adminToken))
+      .send({
+        groups: [groupToAssign2()],
+        unassignExistingGroups: false,
+      })
+      .expect(200)
+      .expect(async (res: any) => {
+        await checkGroups(apiHelper.adminInner.id, [groupToAssign1(), groupToAssign2()]);
       });
   });
 

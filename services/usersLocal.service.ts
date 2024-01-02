@@ -214,6 +214,10 @@ export default class UsersLocalService extends moleculer.Service {
           },
         },
       },
+      unassignExistingGroups: {
+        type: 'boolean',
+        default: true,
+      },
     },
   })
   async invite(
@@ -231,6 +235,7 @@ export default class UsersLocalService extends moleculer.Service {
         password: string;
         apps: number[];
         doNotSendEmail: boolean;
+        unassignExistingGroups: boolean;
       },
       AppAuthMeta & UserAuthMeta
     >,
@@ -243,7 +248,7 @@ export default class UsersLocalService extends moleculer.Service {
       ctx.params.apps = [appId];
     }
 
-    const { email, groups, password, apps } = ctx.params;
+    const { email, groups, password, apps, unassignExistingGroups } = ctx.params;
 
     const userLocal: UserLocal = await ctx.call('usersLocal.findOrCreate', {
       email,
@@ -271,6 +276,7 @@ export default class UsersLocalService extends moleculer.Service {
       const hasGroupChanges = await ctx.call('users.assignGroups', {
         id: userLocal.user,
         groups,
+        unassign: !!unassignExistingGroups,
       });
 
       if (!hasGroupChanges) {
@@ -345,6 +351,10 @@ export default class UsersLocalService extends moleculer.Service {
           },
         },
       },
+      unassignExistingGroups: {
+        type: 'boolean',
+        default: true,
+      },
     },
   })
   async updateUser(
@@ -363,11 +373,12 @@ export default class UsersLocalService extends moleculer.Service {
           role: UserGroupRole;
         }>;
         apps: string[];
+        unassignExistingGroups: boolean;
       },
       AppAuthMeta & UserAuthMeta
     >,
   ) {
-    const { id, groups, password, oldPassword, email } = ctx.params;
+    const { id, groups, password, oldPassword, email, unassignExistingGroups } = ctx.params;
     let user: User = await ctx.call('users.resolve', { id });
 
     const { meta } = ctx;
@@ -417,6 +428,7 @@ export default class UsersLocalService extends moleculer.Service {
         {
           id,
           groups,
+          unassign: !!unassignExistingGroups,
         },
         { meta },
       );

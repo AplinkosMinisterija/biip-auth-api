@@ -23,6 +23,10 @@ const removeUser = (id: string) => {
   return broker.call('users.removeUser', { id });
 };
 
+const getUser = (id: any): Promise<any> => {
+  return broker.call('users.findOne', { query: { id }, populate: 'groups' });
+};
+
 const getDataForCreate = (data = {}) => {
   return {
     firstName: 'Firstname',
@@ -30,6 +34,16 @@ const getDataForCreate = (data = {}) => {
     email: `someemail${Math.floor(Math.random() * 1000)}@mail.com`,
     ...data,
   };
+};
+
+const checkGroups = async (id: any, groups: Array<any>) => {
+  const user = await getUser(id);
+  const userGroups = user.groups;
+  groups.forEach((g) => {
+    const foundGroup = userGroups.find((i: any) => i.id == g.id);
+    expect(foundGroup.id).toEqual(g.id);
+    expect(foundGroup.role).toEqual(g.role);
+  });
 };
 
 describe("Test POST '/api/users'", () => {
@@ -106,6 +120,88 @@ describe("Test POST '/api/users'", () => {
         });
 
       return removeUser(res.body.id);
+    });
+
+    it('Create admin with groups (without unassigning) in admin app (success)', async () => {
+      const createData = getDataForCreate({
+        type: UserType.ADMIN,
+      });
+
+      const group1 = { id: apiHelper.groupAdminInner.id, role: UserGroupRole.USER };
+      const group2 = { id: apiHelper.groupAdminInner2.id, role: UserGroupRole.USER };
+      const res1 = await request(apiService.server)
+        .post(endpoint)
+        .set(apiHelper.getHeaders(apiHelper.superAdminToken))
+        .send({
+          ...createData,
+          groups: [group1],
+        })
+        .expect(200)
+        .expect((res: any) => {
+          expect(res.body.id).not.toBeUndefined();
+          testUpdatedData(res, createData);
+        });
+
+      checkGroups(res1.body.id, [group1]);
+
+      const res2 = await request(apiService.server)
+        .post(endpoint)
+        .set(apiHelper.getHeaders(apiHelper.superAdminToken))
+        .send({
+          ...createData,
+          groups: [group2],
+          unassignExistingGroups: false,
+        })
+        .expect(200)
+        .expect((res: any) => {
+          expect(res.body.id).not.toBeUndefined();
+          testUpdatedData(res, createData);
+        });
+      expect(res1.body.id).toEqual(res2.body.id);
+      checkGroups(res2.body.id, [group1, group2]);
+
+      return removeUser(res1.body.id);
+    });
+
+    it('Create admin with groups (with unassigning) in admin app (success)', async () => {
+      const createData = getDataForCreate({
+        type: UserType.ADMIN,
+      });
+
+      const group1 = { id: apiHelper.groupAdminInner.id, role: UserGroupRole.USER };
+      const group2 = { id: apiHelper.groupAdminInner2.id, role: UserGroupRole.USER };
+      const res1 = await request(apiService.server)
+        .post(endpoint)
+        .set(apiHelper.getHeaders(apiHelper.superAdminToken))
+        .send({
+          ...createData,
+          groups: [group1],
+        })
+        .expect(200)
+        .expect((res: any) => {
+          expect(res.body.id).not.toBeUndefined();
+          testUpdatedData(res, createData);
+        });
+
+      checkGroups(res1.body.id, [group1]);
+
+      const res2 = await request(apiService.server)
+        .post(endpoint)
+        .set(apiHelper.getHeaders(apiHelper.superAdminToken))
+        .send({
+          ...createData,
+          groups: [group2],
+        })
+        .expect(200)
+        .expect((res: any) => {
+          expect(res.body.id).not.toBeUndefined();
+          testUpdatedData(res, createData);
+        });
+
+      expect(res1.body.id).toEqual(res2.body.id);
+      checkGroups(res2.body.id, [group2]);
+
+      return removeUser(res1.body.id);
     });
   });
 
