@@ -3,25 +3,25 @@
 import moleculer, { Context } from 'moleculer';
 import { Action, Event, Method, Service } from 'moleculer-decorators';
 
-import { AppAuthMeta, UserAuthMeta, AuthStrategy } from './api.service';
 import DbConnection from '../mixins/database.mixin';
 import {
-  COMMON_FIELDS,
-  COMMON_DEFAULT_SCOPES,
-  COMMON_SCOPES,
-  FieldHookCallback,
   BaseModelInterface,
+  COMMON_DEFAULT_SCOPES,
+  COMMON_FIELDS,
+  COMMON_SCOPES,
+  DISABLE_REST_ACTIONS,
+  FieldHookCallback,
   throwNotFoundError,
   throwUnauthorizedError,
-  DISABLE_REST_ACTIONS,
 } from '../types';
+import { AppAuthMeta, AuthStrategy, UserAuthMeta } from './api.service';
 
-import { UserLocal } from './usersLocal.service';
-import { UserEvartai } from './usersEvartai.service';
-import { App } from './apps.service';
-import { UserGroup, UserGroupRole } from './userGroups.service';
-import { Group } from './groups.service';
 import { toggleItemInArray } from '../utils/array';
+import { App } from './apps.service';
+import { Group } from './groups.service';
+import { UserGroup, UserGroupRole } from './userGroups.service';
+import { UserEvartai } from './usersEvartai.service';
+import { UserLocal } from './usersLocal.service';
 export enum UserType {
   ADMIN = 'ADMIN',
   USER = 'USER',
@@ -590,7 +590,11 @@ export default class UsersService extends moleculer.Service {
 
     ctx.params.query = ctx.params.query || {};
 
-    const usersIds = await ctx.call('permissions.getVisibleUsersIds', {}, { meta: ctx.meta });
+    const usersIds = await ctx.call(
+      'permissions.getVisibleUsersIds',
+      { groupIds: ctx?.params?.query?.group?.$in },
+      { meta: ctx.meta },
+    );
 
     if (!ctx.params.query.type) {
       ctx.params.query.type = {
