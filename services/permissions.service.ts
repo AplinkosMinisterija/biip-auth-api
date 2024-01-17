@@ -945,7 +945,7 @@ export default class PermissionsService extends moleculer.Service {
         (await this.broker.call('groups.find', {
           query: { id: groupQuery },
         })) as any
-      ).rows.map((group: any) => group.id);
+      )?.map((group: any) => group.id);
     }
 
     if (user.type == UserType.SUPER_ADMIN) {
