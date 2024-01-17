@@ -943,7 +943,7 @@ export default class PermissionsService extends moleculer.Service {
     if (!!groupQuery) {
       groupIds = (
         (await this.broker.call('groups.find', {
-          query: groupQuery,
+          query: { id: groupQuery },
         })) as any
       ).rows.map((group: any) => group.id);
     }
