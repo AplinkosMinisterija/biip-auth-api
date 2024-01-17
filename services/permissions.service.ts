@@ -1,6 +1,5 @@
 'use strict';
 
-import { isEmpty } from 'lodash';
 import moleculer, { Context } from 'moleculer';
 import { Action, Method, Service } from 'moleculer-decorators';
 import DbConnection from '../mixins/database.mixin';
@@ -405,7 +404,7 @@ export default class PermissionsService extends moleculer.Service {
   })
   async getVisibleUsersIds(
     ctx: Context<
-      { userId: number; appId: number; edit: boolean; groupIds: string[] },
+      { userId: number; appId: number; edit: boolean; groupQuery: any },
       UserAuthMeta & AppAuthMeta
     >,
   ) {
@@ -427,7 +426,7 @@ export default class PermissionsService extends moleculer.Service {
 
     const usersIdsInGroup: Array<any> = await this.getVisibleUsersIdsByUser(
       user,
-      ctx.params?.groupIds,
+      ctx?.params?.groupQuery,
       edit,
     );
 
@@ -938,9 +937,19 @@ export default class PermissionsService extends moleculer.Service {
   }
 
   @Method
-  async getVisibleUsersIdsByUser(user: User, groupIds: string[], edit: boolean = false) {
+  async getVisibleUsersIdsByUser(user: User, groupQuery: any, edit: boolean = false) {
+    let groupIds: number[];
+
+    if (groupQuery) {
+      groupIds = (
+        (await this.broker.call('groups.find', {
+          query: groupQuery,
+        })) as any
+      ).rows.map((group: any) => group.id);
+    }
+
     if (user.type == UserType.SUPER_ADMIN) {
-      if (!groupIds || isEmpty(groupIds)) return [];
+      if (!groupQuery) return [];
 
       const usersIds: Array<UserGroup> = await this.broker.call('userGroups.find', {
         query: {
