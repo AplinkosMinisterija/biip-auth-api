@@ -940,7 +940,7 @@ export default class PermissionsService extends moleculer.Service {
   async getVisibleUsersIdsByUser(user: User, groupQuery: any, edit: boolean = false) {
     let groupIds: number[];
 
-    if (groupQuery) {
+    if (!!groupQuery) {
       groupIds = (
         (await this.broker.call('groups.find', {
           query: groupQuery,
