@@ -606,6 +606,8 @@ export default class UsersService extends moleculer.Service {
       $in: this.filterQueryIds(usersIds, ctx.params.query.id),
     };
 
+    delete ctx?.params?.query?.group;
+
     return ctx;
   }
 
