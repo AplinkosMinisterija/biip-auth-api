@@ -965,7 +965,7 @@ export default class PermissionsService extends moleculer.Service {
 
     if (Array.isArray(groupIds)) {
       visibleGroupIds = visibleGroupIds.filter((visibleGroupId) =>
-        groupIds.includes(visibleGroupId.toString()),
+        groupIds.includes(visibleGroupId),
       );
     }
 
