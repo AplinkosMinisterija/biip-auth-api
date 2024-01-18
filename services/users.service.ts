@@ -361,9 +361,15 @@ export default class UsersService extends moleculer.Service {
         convert: true,
       },
       groups: 'array',
+      unassign: {
+        type: 'boolean',
+        default: true,
+      },
     },
   })
-  async assignGroups(ctx: Context<{ id: number; groups: Array<string> }, AppAuthMeta>) {
+  async assignGroups(
+    ctx: Context<{ id: number; groups: Array<string>; unassign: boolean }, AppAuthMeta>,
+  ) {
     const userId = ctx.params.id;
     if (!userId) return;
 
@@ -380,7 +386,7 @@ export default class UsersService extends moleculer.Service {
 
     if (everyGroupAssigned) return false;
 
-    this.assignNewGroupsToUser(newGroups, assignedGroups, ctx.meta);
+    this.assignNewGroupsToUser(newGroups, ctx.params.unassign ? assignedGroups : [], ctx.meta);
     return true;
   }
 
