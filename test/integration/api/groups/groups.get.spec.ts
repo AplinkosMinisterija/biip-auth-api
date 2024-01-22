@@ -148,6 +148,17 @@ describe("Test GET '/api/groups/:id'", () => {
   });
 
   describe('Acting as fisher', () => {
+    let fisherSubcompanyId: number;
+    beforeAll(async () => {
+      const fisherSubcompany: any = await broker.call('groups.create', {
+        name: 'Fishers subcompany',
+        parent: apiHelper.groupFishersCompany.id,
+        companyCode: '160352014',
+      });
+
+      fisherSubcompanyId = fisherSubcompany.id;
+    });
+
     it('Get admin group in admin app (not found)', () => {
       return request(apiService.server)
         .get(`${endpoint}/${apiHelper.groupAdmin.id}`)
@@ -205,6 +216,38 @@ describe("Test GET '/api/groups/:id'", () => {
         .expect(404)
         .expect((res: any) => {
           expect(res.body.type).toEqual(errors.NOT_FOUND);
+        });
+    });
+
+    it('Get fishers company in fishing app (success)', () => {
+      return request(apiService.server)
+        .get(`${endpoint}/${apiHelper.groupFishersCompany.id}`)
+        .set(apiHelper.getHeaders(apiHelper.fisherToken, apiHelper.appFishing.apiKey))
+        .expect(200)
+        .expect((res: any) => {
+          expect(res.body.id).toEqual(apiHelper.groupFishersCompany.id);
+        });
+    });
+
+    it('Get fishers subcompany in fishing app (success)', () => {
+      return request(apiService.server)
+        .get(`${endpoint}/${fisherSubcompanyId}`)
+        .set(apiHelper.getHeaders(apiHelper.fisherToken, apiHelper.appFishing.apiKey))
+        .expect(200)
+        .expect((res: any) => {
+          expect(res.body.id).toEqual(fisherSubcompanyId);
+          expect(res.body.parent).toEqual(apiHelper.groupFishersCompany.id);
+        });
+    });
+
+    it('Get fishers subcompany in fishing app (company user) (success)', () => {
+      return request(apiService.server)
+        .get(`${endpoint}/${fisherSubcompanyId}`)
+        .set(apiHelper.getHeaders(apiHelper.fisherUserToken, apiHelper.appFishing.apiKey))
+        .expect(200)
+        .expect((res: any) => {
+          expect(res.body.id).toEqual(fisherSubcompanyId);
+          expect(res.body.parent).toEqual(apiHelper.groupFishersCompany.id);
         });
     });
   });
