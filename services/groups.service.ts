@@ -502,7 +502,7 @@ export default class GroupsService extends moleculer.Service {
     const { companyCode, parent, id } = ctx.params?.query;
     const { user, app } = ctx.meta;
 
-    let groupsIds: Array<any>;
+    let groupsIds: number[];
 
     // not companies
     if (!companyCode) {
