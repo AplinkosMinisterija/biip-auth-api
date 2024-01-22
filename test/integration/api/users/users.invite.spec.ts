@@ -269,6 +269,38 @@ describe("Test POST '/api/users/invite'", () => {
             expect(res.body.parent).toEqual(apiHelper.groupFishersCompany.id);
           });
       });
+
+      it('With fishing group parent (multilevel) (success)', async () => {
+        const companyCode = '458295438';
+        const companyCode2 = '339106451';
+        const res = await request(apiService.server)
+          .post(endpoint)
+          .set(apiHelper.getHeaders(apiHelper.fisherToken, apiHelper.appFishing.apiKey))
+          .send({
+            companyCode,
+            companyId: apiHelper.groupFishersCompany.id,
+          })
+          .expect(200)
+          .expect((res: any) => {
+            expect(res.body.companyCode).toEqual(companyCode);
+            expect(res.body.parent).toEqual(apiHelper.groupFishersCompany.id);
+          });
+
+        const innerCompanyId = res.body.id;
+
+        return request(apiService.server)
+          .post(endpoint)
+          .set(apiHelper.getHeaders(apiHelper.fisherToken, apiHelper.appFishing.apiKey))
+          .send({
+            companyCode: companyCode2,
+            companyId: innerCompanyId,
+          })
+          .expect(200)
+          .expect((res: any) => {
+            expect(res.body.companyCode).toEqual(companyCode2);
+            expect(res.body.parent).toEqual(innerCompanyId);
+          });
+      });
     });
   });
 });
