@@ -499,21 +499,25 @@ export default class GroupsService extends moleculer.Service {
 
     ctx.params.query = ctx.params.query || {};
 
+    const { companyCode, parent, id } = ctx.params?.query;
+    const { user, app } = ctx.meta;
+
+    let groupsIds: number[];
+
     // not companies
-    if (!ctx.params.query.companyCode) {
+    if (!companyCode) {
       ctx.params.query.companyCode = { $exists: false };
     }
 
-    let groupsIds: Array<any>;
-    if (!ctx.params.query?.parent) {
-      if (ctx.meta.user.type === UserType.SUPER_ADMIN) {
+    if (!parent) {
+      if (user.type === UserType.SUPER_ADMIN) {
         ctx.params.query.parent = {
           $exists: false,
         };
-        ctx.params.query.$raw = `apps_ids @> ANY (ARRAY ['${ctx.meta.app.id}']::jsonb[])`;
+        ctx.params.query.$raw = `apps_ids @> ANY (ARRAY ['${app.id}']::jsonb[])`;
       } else {
         const userGroups = await ctx.call('userGroups.find', {
-          query: { user: ctx.meta.user.id, role: UserGroupRole.ADMIN },
+          query: { user: user.id, role: UserGroupRole.ADMIN },
         });
         groupsIds = userGroups.map((u: any) => u.group);
       }
@@ -522,7 +526,8 @@ export default class GroupsService extends moleculer.Service {
     }
 
     if (groupsIds) {
-      ctx.params.query.id = { $in: groupsIds };
+      const idQuery = { $in: groupsIds };
+      ctx.params.query.id = id ? { $and: [id, idQuery] } : idQuery;
     }
 
     return ctx;

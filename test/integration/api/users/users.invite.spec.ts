@@ -66,6 +66,39 @@ describe("Test POST '/api/users/invite'", () => {
         });
     });
 
+    describe('Invite company with parent company', () => {
+      it('With fishing group parent (success)', () => {
+        const companyCode = '446963851';
+        return request(apiService.server)
+          .post(endpoint)
+          .set(apiHelper.getHeaders(apiHelper.superAdminToken, apiHelper.appFishing.apiKey))
+          .send({
+            companyCode,
+            companyId: apiHelper.groupFishersCompany.id,
+          })
+          .expect(200)
+          .expect((res: any) => {
+            expect(res.body.companyCode).toEqual(companyCode);
+            expect(res.body.parent).toEqual(apiHelper.groupFishersCompany.id);
+          });
+      });
+
+      it('With hunting parent (fail)', () => {
+        const companyCode = '854103766';
+        return request(apiService.server)
+          .post(endpoint)
+          .set(apiHelper.getHeaders(apiHelper.superAdminToken, apiHelper.appFishing.apiKey))
+          .send({
+            companyCode,
+            companyId: apiHelper.groupHunters.id,
+          })
+          .expect(404)
+          .expect((res: any) => {
+            expect(res.body.type).toEqual(errors.NOT_FOUND);
+          });
+      });
+    });
+
     describe('Invite same company', () => {
       it('Invite fishers company to fishing app (fail)', () => {
         return request(apiService.server)
@@ -214,6 +247,58 @@ describe("Test POST '/api/users/invite'", () => {
           .expect(200)
           .expect((res: any) => {
             expect(res.body.id).toEqual(user.id);
+          });
+      });
+    });
+  });
+
+  describe('Acting as fisher', () => {
+    describe('Invite company with parent company', () => {
+      it('With fishing group parent (success)', async () => {
+        const companyCode = '196541141';
+        return request(apiService.server)
+          .post(endpoint)
+          .set(apiHelper.getHeaders(apiHelper.fisherToken, apiHelper.appFishing.apiKey))
+          .send({
+            companyCode,
+            companyId: apiHelper.groupFishersCompany.id,
+          })
+          .expect(200)
+          .expect((res: any) => {
+            expect(res.body.companyCode).toEqual(companyCode);
+            expect(res.body.parent).toEqual(apiHelper.groupFishersCompany.id);
+          });
+      });
+
+      it('With fishing group parent (multilevel) (success)', async () => {
+        const companyCode = '458295438';
+        const companyCode2 = '339106451';
+        const res = await request(apiService.server)
+          .post(endpoint)
+          .set(apiHelper.getHeaders(apiHelper.fisherToken, apiHelper.appFishing.apiKey))
+          .send({
+            companyCode,
+            companyId: apiHelper.groupFishersCompany.id,
+          })
+          .expect(200)
+          .expect((res: any) => {
+            expect(res.body.companyCode).toEqual(companyCode);
+            expect(res.body.parent).toEqual(apiHelper.groupFishersCompany.id);
+          });
+
+        const innerCompanyId = res.body.id;
+
+        return request(apiService.server)
+          .post(endpoint)
+          .set(apiHelper.getHeaders(apiHelper.fisherToken, apiHelper.appFishing.apiKey))
+          .send({
+            companyCode: companyCode2,
+            companyId: innerCompanyId,
+          })
+          .expect(200)
+          .expect((res: any) => {
+            expect(res.body.companyCode).toEqual(companyCode2);
+            expect(res.body.parent).toEqual(innerCompanyId);
           });
       });
     });
