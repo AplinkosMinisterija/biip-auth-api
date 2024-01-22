@@ -37,7 +37,7 @@ describe("Test GET '/api/users'", () => {
         });
     });
 
-    it(`Users count equal to 3, filtering by the "groupAdminInner","groupAdmin" groups`, () => {
+    it(`Users count equal to 2, filtering by the "groupAdminInner","groupAdmin" groups`, () => {
       return request(apiService.server)
         .get(endpoint)
         .set(apiHelper.getHeaders(apiHelper.superAdminToken))
@@ -50,7 +50,7 @@ describe("Test GET '/api/users'", () => {
         });
     });
 
-    it(`Users count equal to 0, filtering by the  groups`, () => {
+    it(`Users count equal to 0, filtering by non-existent group id`, () => {
       return request(apiService.server)
         .get(endpoint)
         .set(apiHelper.getHeaders(apiHelper.superAdminToken))
