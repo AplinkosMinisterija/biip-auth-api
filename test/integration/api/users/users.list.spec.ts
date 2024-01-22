@@ -1,7 +1,7 @@
 'use strict';
+import { afterAll, beforeAll, describe, expect, it } from '@jest/globals';
 import { ServiceBroker } from 'moleculer';
 import { ApiHelper, errors, serviceBrokerConfig, testListCountsAndIds } from '../../../helpers/api';
-import { expect, describe, beforeAll, afterAll, it } from '@jest/globals';
 
 const request = require('supertest');
 
@@ -34,6 +34,17 @@ describe("Test GET '/api/users'", () => {
             apiHelper.admin.id,
             apiHelper.adminInner.id,
           ]);
+        });
+    });
+
+    it(`Users count equal to 2, filtering by the "groupAdminInner" group`, () => {
+      return request(apiService.server)
+        .get(endpoint)
+        .set(apiHelper.getHeaders(apiHelper.superAdminToken))
+        .query({ query: { group: apiHelper.groupAdminInner.id } })
+        .expect(200)
+        .expect((res: any) => {
+          testListCountsAndIds(res, [apiHelper.superAdmin.id, apiHelper.adminInner.id]);
         });
     });
 

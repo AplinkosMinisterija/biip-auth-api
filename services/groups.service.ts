@@ -437,7 +437,6 @@ export default class GroupsService extends moleculer.Service {
 
   @Action({
     rest: 'GET /flat',
-    types: [UserType.SUPER_ADMIN, UserType.ADMIN],
   })
   async flatGroups(ctx: any) {
     if (typeof ctx.params.query === 'string') {
@@ -446,20 +445,24 @@ export default class GroupsService extends moleculer.Service {
 
     ctx.params.query = ctx.params.query || {};
 
-    if (!ctx?.params?.query?.companyCode) {
+    const { companyCode } = ctx.params.query;
+
+    const { user, app } = ctx.meta;
+
+    if (!companyCode) {
       ctx.params.query.companyCode = { $exists: false };
     }
 
     let groupIds: number[];
-    if (ctx.meta.user.type === UserType.SUPER_ADMIN) {
+    if (user.type === UserType.SUPER_ADMIN) {
       const groupsWithApp: Array<InheritedGroupApp> = await ctx.call('inheritedGroupApps.find', {
-        query: { $raw: `inherited_apps_ids @> ANY (ARRAY ['${ctx.meta.app.id}']::jsonb[])` },
+        query: { $raw: `inherited_apps_ids @> ANY (ARRAY ['${app.id}']::jsonb[])` },
       });
 
       groupIds = groupsWithApp.map((item) => item.group as number);
     } else {
       const userGroups = await ctx.call('userGroups.find', {
-        query: { user: ctx.meta.user.id, role: UserGroupRole.ADMIN },
+        query: { user: user.id, role: UserGroupRole.ADMIN },
       });
       const userGroupIds = userGroups.map((userGroup: any) => userGroup.group);
 

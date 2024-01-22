@@ -1,7 +1,7 @@
 'use strict';
+import { afterAll, beforeAll, describe, expect, it } from '@jest/globals';
 import { ServiceBroker } from 'moleculer';
 import { ApiHelper, errors, serviceBrokerConfig, testListCountsAndIds } from '../../../helpers/api';
-import { expect, describe, beforeAll, afterAll, it } from '@jest/globals';
 
 const request = require('supertest');
 
@@ -38,6 +38,21 @@ describe("Test GET '/api/groups'", () => {
         .expect(200)
         .expect((res: any) => {
           testListCountsAndIds(res, [apiHelper.groupAdmin.id]);
+        });
+    });
+
+    it('Flat groups count equal to 4 in admin app', () => {
+      return request(apiService.server)
+        .get(`${endpoint}/flat`)
+        .set(apiHelper.getHeaders(apiHelper.superAdminToken, apiHelper.appFishing.apiKey))
+        .expect(200)
+        .expect((res: any) => {
+          testListCountsAndIds(res, [
+            apiHelper.groupAdmin.id,
+            apiHelper.groupFishers.id,
+            apiHelper.groupAdminInner.id,
+            apiHelper.groupAdminInner2.id,
+          ]);
         });
     });
 
@@ -85,6 +100,20 @@ describe("Test GET '/api/groups'", () => {
         });
     });
 
+    it('Flat groups count equal to 3 in admin app', () => {
+      return request(apiService.server)
+        .get(`${endpoint}/flat`)
+        .set(apiHelper.getHeaders(apiHelper.adminToken, apiHelper.appFishing.apiKey))
+        .expect(200)
+        .expect((res: any) => {
+          testListCountsAndIds(res, [
+            apiHelper.groupAdmin.id,
+            apiHelper.groupAdminInner.id,
+            apiHelper.groupAdminInner2.id,
+          ]);
+        });
+    });
+
     it('Groups count equal to 1 (admin group) in fishing app', () => {
       return request(apiService.server)
         .get(endpoint)
@@ -126,6 +155,16 @@ describe("Test GET '/api/groups'", () => {
         .expect(401)
         .expect((res: any) => {
           expect(res.body.type).toEqual(errors.INVALID_TOKEN);
+        });
+    });
+
+    it('Flat groups count equal to 0 in fishing app', () => {
+      return request(apiService.server)
+        .get(`${endpoint}/flat`)
+        .set(apiHelper.getHeaders(apiHelper.fisherToken, apiHelper.appFishing.apiKey))
+        .expect(200)
+        .expect((res: any) => {
+          testListCountsAndIds(res, []);
         });
     });
 
