@@ -443,10 +443,18 @@ export default class UsersEvartaiService extends moleculer.Service {
         return groupExists;
       }
 
+      if (companyId) {
+        // validate parent company
+        await ctx.call('groups.get', {
+          id: companyId,
+        });
+      }
+
       const group: Group = await ctx.call(
         'groups.create',
         {
           companyCode,
+          parent: companyId,
           apps: [app.id],
         },
         { meta },
