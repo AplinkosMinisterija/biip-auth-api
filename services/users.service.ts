@@ -598,7 +598,7 @@ export default class UsersService extends moleculer.Service {
 
     const usersIds = await ctx.call(
       'permissions.getVisibleUsersIds',
-      { groupQuery: ctx?.params?.query?.group },
+      { group: ctx?.params?.query?.group },
       { meta: ctx.meta },
     );
 

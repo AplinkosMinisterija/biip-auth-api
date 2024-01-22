@@ -1,6 +1,6 @@
 'use strict';
 
-import moleculer, { Context } from 'moleculer';
+import moleculer, { Context, GenericObject } from 'moleculer';
 import { Action, Method, Service } from 'moleculer-decorators';
 
 import DbConnection from '../mixins/database.mixin';
@@ -438,11 +438,10 @@ export default class GroupsService extends moleculer.Service {
   @Action({
     rest: 'GET /flat',
   })
-  async flatGroups(ctx: any) {
+  async flatGroups(ctx: Context<{ query: GenericObject | string }, UserAuthMeta & AppAuthMeta>) {
     if (typeof ctx.params.query === 'string') {
-      ctx.params.query = JSON.parse(ctx.params.query);
+      ctx.params.query = JSON.parse(ctx.params.query) as GenericObject;
     }
-
     ctx.params.query = ctx.params.query || {};
 
     const { companyCode } = ctx.params.query;
@@ -461,9 +460,12 @@ export default class GroupsService extends moleculer.Service {
 
       groupIds = groupsWithApp.map((item) => item.group as number);
     } else {
-      const userGroups = await ctx.call('userGroups.find', {
-        query: { user: user.id, role: UserGroupRole.ADMIN },
-      });
+      const userGroups: { user: number; group: number; id: number }[] = await ctx.call(
+        'userGroups.find',
+        {
+          query: { user: user.id, role: UserGroupRole.ADMIN },
+        },
+      );
       const userGroupIds = userGroups.map((userGroup: any) => userGroup.group);
 
       const userGroupChildIds = (

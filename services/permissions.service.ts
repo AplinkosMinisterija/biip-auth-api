@@ -1,6 +1,7 @@
 'use strict';
 
-import moleculer, { Context } from 'moleculer';
+import { isEmpty } from 'lodash';
+import moleculer, { Context, GenericObject } from 'moleculer';
 import { Action, Method, Service } from 'moleculer-decorators';
 import DbConnection from '../mixins/database.mixin';
 import {
@@ -404,12 +405,13 @@ export default class PermissionsService extends moleculer.Service {
   })
   async getVisibleUsersIds(
     ctx: Context<
-      { userId: number; appId: number; edit: boolean; groupQuery: any },
+      { userId: number; appId: number; edit: boolean; group: number | GenericObject },
       UserAuthMeta & AppAuthMeta
     >,
   ) {
     let app: App = ctx.meta.app;
     let user: User = ctx.meta.user;
+    const group = ctx?.params?.group;
 
     if (ctx.params.appId) {
       app = await ctx.call('apps.resolve', { id: ctx.params.appId });
@@ -424,11 +426,11 @@ export default class PermissionsService extends moleculer.Service {
       throwNotFoundError('App not found');
     }
 
-    const usersIdsInGroup: Array<any> = await this.getVisibleUsersIdsByUser(
-      user,
-      ctx?.params?.groupQuery,
-      edit,
-    );
+    const usersIdsInGroup: Array<any> = await this.getVisibleUsersIdsByUser(user, group, edit);
+
+    if (!!group && isEmpty(usersIdsInGroup)) {
+      return [];
+    }
 
     const visibleUsersInGroupsWithApp: Array<number> = await ctx.call(
       'inheritedUserApps.getUserIdsByApp',
@@ -937,19 +939,19 @@ export default class PermissionsService extends moleculer.Service {
   }
 
   @Method
-  async getVisibleUsersIdsByUser(user: User, groupQuery: any, edit: boolean = false) {
+  async getVisibleUsersIdsByUser(user: User, group: number | GenericObject, edit: boolean = false) {
     let groupIds: number[];
 
-    if (!!groupQuery) {
-      groupIds = (
-        (await this.broker.call('groups.find', {
-          query: { id: groupQuery },
-        })) as any
-      )?.map((group: any) => group.id);
+    if (!!group) {
+      const groups: Group[] = await this.broker.call('groups.find', {
+        query: { id: group },
+      });
+
+      groupIds = groups?.map((group) => group.id);
     }
 
     if (user.type == UserType.SUPER_ADMIN) {
-      if (!groupQuery) return [];
+      if (!group) return [];
 
       const usersIds: Array<UserGroup> = await this.broker.call('userGroups.find', {
         query: {
@@ -958,7 +960,7 @@ export default class PermissionsService extends moleculer.Service {
         fields: 'user',
       });
 
-      return [...usersIds.map((i) => i.user), user.id];
+      return [...usersIds.map((i) => i.user)];
     }
 
     let visibleGroupIds = await this.getVisibleGroupsByUser(user.id, edit && UserGroupRole.ADMIN);
@@ -976,7 +978,7 @@ export default class PermissionsService extends moleculer.Service {
       fields: 'user',
     });
 
-    return [...usersIds.map((i) => i.user), user.id];
+    return [...usersIds.map((i) => i.user)];
   }
 
   @Method

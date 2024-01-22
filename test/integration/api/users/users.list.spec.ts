@@ -37,14 +37,42 @@ describe("Test GET '/api/users'", () => {
         });
     });
 
-    it(`Users count equal to 2, filtering by the "groupAdminInner" group`, () => {
+    it(`Users count equal to 3, filtering by the "groupAdminInner","groupAdmin" groups`, () => {
+      return request(apiService.server)
+        .get(endpoint)
+        .set(apiHelper.getHeaders(apiHelper.superAdminToken))
+        .query({
+          query: { group: { $in: [apiHelper.groupAdmin.id, apiHelper.groupAdminInner.id] } },
+        })
+        .expect(200)
+        .expect((res: any) => {
+          testListCountsAndIds(res, [apiHelper.adminInner.id, apiHelper.admin.id]);
+        });
+    });
+
+    it(`Users count equal to 0, filtering by the  groups`, () => {
+      return request(apiService.server)
+        .get(endpoint)
+        .set(apiHelper.getHeaders(apiHelper.superAdminToken))
+        .query({
+          query: {
+            group: -1,
+          },
+        })
+        .expect(200)
+        .expect((res: any) => {
+          testListCountsAndIds(res, []);
+        });
+    });
+
+    it(`Users count equal to 1, filtering by the "groupAdminInner" group`, () => {
       return request(apiService.server)
         .get(endpoint)
         .set(apiHelper.getHeaders(apiHelper.superAdminToken))
         .query({ query: { group: apiHelper.groupAdminInner.id } })
         .expect(200)
         .expect((res: any) => {
-          testListCountsAndIds(res, [apiHelper.superAdmin.id, apiHelper.adminInner.id]);
+          testListCountsAndIds(res, [apiHelper.adminInner.id]);
         });
     });
 
