@@ -37,7 +37,7 @@ describe("Test GET '/api/groups'", () => {
         .set(apiHelper.getHeaders(apiHelper.superAdminToken))
         .expect(200)
         .expect((res: any) => {
-          testListCountsAndIds(res, [apiHelper.groupAdmin.id]);
+          testListCountsAndIds(res, [apiHelper.groupAdmin.id, apiHelper.groupWithoutUsers.id]);
         });
     });
 
