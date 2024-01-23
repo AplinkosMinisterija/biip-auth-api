@@ -37,6 +37,19 @@ describe("Test GET '/api/users'", () => {
         });
     });
 
+    it(`Users count equal to 0, filtering by the "group without users" group`, () => {
+      return request(apiService.server)
+        .get(endpoint)
+        .set(apiHelper.getHeaders(apiHelper.adminInnerToken))
+        .query({
+          query: { group: apiHelper.groupWithoutUsers.id },
+        })
+        .expect(200)
+        .expect((res: any) => {
+          testListCountsAndIds(res, []);
+        });
+    });
+
     it(`Users count equal to 2, filtering by the "groupAdminInner","groupAdmin" groups`, () => {
       return request(apiService.server)
         .get(endpoint)

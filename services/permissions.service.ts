@@ -428,8 +428,10 @@ export default class PermissionsService extends moleculer.Service {
 
     const usersIdsInGroup: Array<any> = await this.getVisibleUsersIdsByUser(user, group, edit);
 
-    if (!!group && isEmpty(usersIdsInGroup)) {
-      return [];
+    if (isEmpty(usersIdsInGroup)) {
+      if (!!group || user.type !== UserType.SUPER_ADMIN) {
+        return [];
+      }
     }
 
     const visibleUsersInGroupsWithApp: Array<number> = await ctx.call(
