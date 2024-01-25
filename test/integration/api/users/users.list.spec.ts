@@ -1,7 +1,7 @@
 'use strict';
+import { afterAll, beforeAll, describe, expect, it } from '@jest/globals';
 import { ServiceBroker } from 'moleculer';
 import { ApiHelper, errors, serviceBrokerConfig, testListCountsAndIds } from '../../../helpers/api';
-import { expect, describe, beforeAll, afterAll, it } from '@jest/globals';
 
 const request = require('supertest');
 
@@ -34,6 +34,58 @@ describe("Test GET '/api/users'", () => {
             apiHelper.admin.id,
             apiHelper.adminInner.id,
           ]);
+        });
+    });
+
+    it(`Users count equal to 0, filtering by the "group without users" group`, () => {
+      return request(apiService.server)
+        .get(endpoint)
+        .set(apiHelper.getHeaders(apiHelper.adminInnerToken))
+        .query({
+          query: { group: apiHelper.groupWithoutUsers.id },
+        })
+        .expect(200)
+        .expect((res: any) => {
+          testListCountsAndIds(res, []);
+        });
+    });
+
+    it(`Users count equal to 2, filtering by the "groupAdminInner","groupAdmin" groups`, () => {
+      return request(apiService.server)
+        .get(endpoint)
+        .set(apiHelper.getHeaders(apiHelper.superAdminToken))
+        .query({
+          query: { group: { $in: [apiHelper.groupAdmin.id, apiHelper.groupAdminInner.id] } },
+        })
+        .expect(200)
+        .expect((res: any) => {
+          testListCountsAndIds(res, [apiHelper.adminInner.id, apiHelper.admin.id]);
+        });
+    });
+
+    it(`Users count equal to 0, filtering by non-existent group id`, () => {
+      return request(apiService.server)
+        .get(endpoint)
+        .set(apiHelper.getHeaders(apiHelper.superAdminToken))
+        .query({
+          query: {
+            group: -1,
+          },
+        })
+        .expect(200)
+        .expect((res: any) => {
+          testListCountsAndIds(res, []);
+        });
+    });
+
+    it(`Users count equal to 1, filtering by the "groupAdminInner" group`, () => {
+      return request(apiService.server)
+        .get(endpoint)
+        .set(apiHelper.getHeaders(apiHelper.superAdminToken))
+        .query({ query: { group: apiHelper.groupAdminInner.id } })
+        .expect(200)
+        .expect((res: any) => {
+          testListCountsAndIds(res, [apiHelper.adminInner.id]);
         });
     });
 
