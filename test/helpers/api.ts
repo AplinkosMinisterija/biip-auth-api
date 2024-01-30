@@ -113,6 +113,8 @@ export class ApiHelper {
 
   companyCode = '874213437';
 
+  userLocalInviteMeta = { meta: { hasPermissions: true } };
+
   constructor(broker: any) {
     this.broker = broker;
   }
@@ -324,9 +326,7 @@ export class ApiHelper {
         password: this.goodPassword,
         type: type || UserType.USER,
       },
-      {
-        meta: { hasPermissions: true },
-      },
+      this.userLocalInviteMeta,
     );
   };
 }

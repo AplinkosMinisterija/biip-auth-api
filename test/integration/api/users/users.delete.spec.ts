@@ -38,7 +38,7 @@ const createUser = (groupId?: any, appId?: any, type?: UserType): Promise<User> 
     createData.apps = [appId || apiHelper.appAdmin.id];
   }
 
-  return broker.call('usersLocal.invite', createData);
+  return broker.call('usersLocal.invite', createData, apiHelper.userLocalInviteMeta);
 };
 
 const removeUser = (id: any) => {
