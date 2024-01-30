@@ -1,11 +1,11 @@
+import faker from '@faker-js/faker';
+import { expect } from '@jest/globals';
+import { BrokerOptions, ServiceBroker } from 'moleculer';
+import config from '../../moleculer.config';
 import { App, AppType } from '../../services/apps.service';
 import { Group } from '../../services/groups.service';
 import { UserGroupRole } from '../../services/userGroups.service';
 import { User, UserType } from '../../services/users.service';
-import { expect } from '@jest/globals';
-import config from '../../moleculer.config';
-import { BrokerOptions, ServiceBroker } from 'moleculer';
-import faker from '@faker-js/faker';
 
 const APISchema = require('../../services/api.service').default;
 const AppsSchema = require('../../services/apps.service').default;
@@ -86,6 +86,7 @@ export class ApiHelper {
   fisherEvartai: User;
 
   groupAdmin: Group;
+  groupWithoutUsers: Group;
   groupAdminInner: Group;
   groupFishers: Group;
   groupFishersCompany: Group;
@@ -172,6 +173,12 @@ export class ApiHelper {
       name: 'Group Admin',
       apps: [this.appAdmin.id, this.appFishing.id],
     });
+
+    this.groupWithoutUsers = await this.broker.call('groups.create', {
+      name: 'Group without users',
+      apps: [this.appAdmin.id],
+    });
+
     this.groupAdminInner = await this.broker.call('groups.create', {
       name: 'Group Admin Inner',
       parent: this.groupAdmin.id,

@@ -1,31 +1,31 @@
 'use strict';
 
-import moleculer, { Context } from 'moleculer';
+import moleculer, { Context, GenericObject } from 'moleculer';
 import { Action, Method, Service } from 'moleculer-decorators';
 
 import DbConnection from '../mixins/database.mixin';
 import {
-  COMMON_FIELDS,
-  COMMON_DEFAULT_SCOPES,
-  COMMON_SCOPES,
-  FieldHookCallback,
   BaseModelInterface,
+  COMMON_DEFAULT_SCOPES,
+  COMMON_FIELDS,
+  COMMON_SCOPES,
+  DISABLE_REST_ACTIONS,
+  FieldHookCallback,
+  throwBadRequestError,
   throwNotFoundError,
   throwUnauthorizedError,
   throwValidationError,
-  DISABLE_REST_ACTIONS,
-  throwBadRequestError,
-  EndpointType,
 } from '../types';
 
 import { companyCode as companyCodeChecker } from 'lt-codes';
 
-import { App } from './apps.service';
-import { User, UserType } from './users.service';
-import { UserGroup, UserGroupRole } from './userGroups.service';
-import { AppAuthMeta, UserAuthMeta } from './api.service';
 import { toggleItemInArray } from '../utils/array';
+import { AppAuthMeta, UserAuthMeta } from './api.service';
+import { App } from './apps.service';
+import { InheritedGroupApp } from './inheritedGroupApps.service';
 import { Permission } from './permissions.service';
+import { UserGroup, UserGroupRole } from './userGroups.service';
+import { User, UserType } from './users.service';
 export interface Group extends BaseModelInterface {
   name: string;
   apps: App[];
@@ -436,6 +436,70 @@ export default class GroupsService extends moleculer.Service {
   }
 
   @Action({
+    rest: 'GET /flat',
+  })
+  async flatGroups(ctx: Context<{ query: GenericObject | string }, UserAuthMeta & AppAuthMeta>) {
+    if (typeof ctx.params.query === 'string') {
+      ctx.params.query = JSON.parse(ctx.params.query) as GenericObject;
+    }
+    ctx.params.query = ctx.params.query || {};
+
+    const { companyCode } = ctx.params.query;
+
+    const { user, app } = ctx.meta;
+
+    if (!companyCode) {
+      ctx.params.query.companyCode = { $exists: false };
+    }
+
+    let groupIds: number[];
+    if (user.type === UserType.SUPER_ADMIN) {
+      const groupsWithApp: Array<InheritedGroupApp> = await ctx.call('inheritedGroupApps.find', {
+        query: { $raw: `inherited_apps_ids @> ANY (ARRAY ['${app.id}']::jsonb[])` },
+      });
+
+      groupIds = groupsWithApp.map((item) => item.group as number);
+    } else {
+      const userGroups: { user: number; group: number; id: number }[] = await ctx.call(
+        'userGroups.find',
+        {
+          query: { user: user.id, role: UserGroupRole.ADMIN },
+        },
+      );
+      const userGroupIds = userGroups.map((userGroup: any) => userGroup.group);
+
+      const userGroupChildIds = (
+        await Promise.all(
+          userGroupIds.map(
+            async (id: number) =>
+              await ctx.call('groups.getGroupChildrenIds', {
+                id,
+              }),
+          ),
+        )
+      ).flat();
+
+      groupIds = [...userGroupIds, ...userGroupChildIds];
+    }
+
+    if (groupIds) {
+      ctx.params.query.id = { $in: groupIds };
+    }
+
+    const params = this.sanitizeParams(ctx.params, { list: true });
+    const rows = await this.findEntities(ctx, params);
+    const total = await this.countEntities(ctx, params);
+
+    return {
+      rows,
+      total,
+      page: params.page,
+      pageSize: params.pageSize,
+      totalPages: Math.floor((total + params.pageSize - 1) / params.pageSize),
+    };
+  }
+
+  @Action({
     rest: 'DELETE /:id',
     params: {
       id: {
@@ -500,21 +564,25 @@ export default class GroupsService extends moleculer.Service {
 
     ctx.params.query = ctx.params.query || {};
 
+    const { companyCode, parent, id } = ctx.params?.query;
+    const { user, app } = ctx.meta;
+
+    let groupsIds: number[];
+
     // not companies
-    if (!ctx.params.query.companyCode) {
+    if (!companyCode) {
       ctx.params.query.companyCode = { $exists: false };
     }
 
-    let groupsIds: Array<any>;
-    if (!ctx.params.query?.parent) {
-      if (ctx.meta.user.type === UserType.SUPER_ADMIN) {
+    if (!parent) {
+      if (user.type === UserType.SUPER_ADMIN) {
         ctx.params.query.parent = {
           $exists: false,
         };
-        ctx.params.query.$raw = `apps_ids @> ANY (ARRAY ['${ctx.meta.app.id}']::jsonb[])`;
+        ctx.params.query.$raw = `apps_ids @> ANY (ARRAY ['${app.id}']::jsonb[])`;
       } else {
         const userGroups = await ctx.call('userGroups.find', {
-          query: { user: ctx.meta.user.id, role: UserGroupRole.ADMIN },
+          query: { user: user.id, role: UserGroupRole.ADMIN },
         });
         groupsIds = userGroups.map((u: any) => u.group);
       }
@@ -523,7 +591,8 @@ export default class GroupsService extends moleculer.Service {
     }
 
     if (groupsIds) {
-      ctx.params.query.id = { $in: groupsIds };
+      const idQuery = { $in: groupsIds };
+      ctx.params.query.id = id ? { $and: [id, idQuery] } : idQuery;
     }
 
     return ctx;
