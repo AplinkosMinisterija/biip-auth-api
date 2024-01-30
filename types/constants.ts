@@ -1,6 +1,13 @@
 import Moleculer, { Errors } from 'moleculer';
 import { FieldHookCallback } from './';
 
+export enum EndpointType {
+  ADMIN = 'ADMIN',
+  USER = 'USER',
+  SUPER_ADMIN = 'SUPER_ADMIN',
+  PUBLIC = 'PUBLIC',
+}
+
 export function throwUnauthorizedError(message?: string, data?: any): Errors.MoleculerError {
   throw new Moleculer.Errors.MoleculerClientError(
     message || `Unauthorized.`,
@@ -8,6 +15,9 @@ export function throwUnauthorizedError(message?: string, data?: any): Errors.Mol
     'UNAUTHORIZED',
     data,
   );
+}
+export function throwNoTokenError(data?: any): Errors.MoleculerError {
+  throw new Moleculer.Errors.MoleculerClientError('Unauthorized', 401, 'NO_TOKEN', data);
 }
 export function throwValidationError(message?: string, data?: any): Errors.MoleculerError {
   throw new Moleculer.Errors.MoleculerClientError(

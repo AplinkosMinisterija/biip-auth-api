@@ -74,6 +74,7 @@ export class ApiHelper {
   appFishing: App;
   appHunting: App;
   appUsers: App;
+  appSelfUsers: App;
 
   superAdmin: User;
   fisher: User;
@@ -91,6 +92,7 @@ export class ApiHelper {
   groupHuntersCompany: Group;
   groupAdminInner2: Group;
   groupHunters: Group;
+  groupSelfUsers: Group;
 
   superAdminToken: string;
   fisherToken: string;
@@ -156,6 +158,15 @@ export class ApiHelper {
         productNameTo: faker.lorem.word(2),
       },
     });
+    this.appSelfUsers = await this.broker.call('apps.create', {
+      name: 'Self Users',
+      type: 'SELF_USERS',
+      url: faker.internet.url(),
+      settings: {
+        productNameTo: faker.lorem.word(2),
+        canInviteSelf: true,
+      },
+    });
 
     this.groupAdmin = await this.broker.call('groups.create', {
       name: 'Group Admin',
@@ -186,6 +197,10 @@ export class ApiHelper {
       name: 'Group Hunters Company',
       apps: [this.appHunting.id],
       companyCode: '505063988',
+    });
+    this.groupSelfUsers = await this.broker.call('groups.create', {
+      name: 'Group Self Users',
+      apps: [this.appSelfUsers.id],
     });
 
     this.superAdmin = await this.createUser(this.goodEmail, UserType.SUPER_ADMIN);
@@ -291,14 +306,20 @@ export class ApiHelper {
     apps?: Array<any>,
     groups?: Array<any>,
   ): Promise<User> => {
-    return this.broker.call('usersLocal.invite', {
-      email: email,
-      firstName: 'User',
-      lastName: 'TEST',
-      apps: apps || [],
-      groups: groups || [],
-      password: this.goodPassword,
-      type: type || UserType.USER,
-    });
+    return this.broker.call(
+      'usersLocal.invite',
+      {
+        email: email,
+        firstName: 'User',
+        lastName: 'TEST',
+        apps: apps || [],
+        groups: groups || [],
+        password: this.goodPassword,
+        type: type || UserType.USER,
+      },
+      {
+        meta: { hasPermissions: true },
+      },
+    );
   };
 }

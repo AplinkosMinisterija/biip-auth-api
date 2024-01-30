@@ -16,6 +16,7 @@ import {
   throwNotFoundError,
   throwUnauthorizedError,
   DISABLE_REST_ACTIONS,
+  EndpointType,
 } from '../types';
 import { AppAuthMeta, UserAuthMeta } from './api.service';
 
@@ -181,7 +182,7 @@ export default class PermissionsService extends moleculer.Service {
 
   @Action({
     rest: 'GET /users',
-    auth: false,
+    auth: EndpointType.PUBLIC,
     params: {
       access: 'string',
       municipality: {

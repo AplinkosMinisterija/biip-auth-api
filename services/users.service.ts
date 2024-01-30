@@ -14,6 +14,7 @@ import {
   throwNotFoundError,
   throwUnauthorizedError,
   DISABLE_REST_ACTIONS,
+  EndpointType,
 } from '../types';
 
 import { UserLocal } from './usersLocal.service';
@@ -395,13 +396,27 @@ export default class UsersService extends moleculer.Service {
    */
   @Action({
     params: {
-      types: { type: 'array', items: 'string', enum: Object.values(UserType) },
+      types: { type: 'array', items: 'string', enum: Object.values(EndpointType) },
     },
   })
-  async validateType(ctx: Context<{ types: UserType[] }, UserAuthMeta>) {
+  async validateType(ctx: Context<{ types: EndpointType[] }, UserAuthMeta>) {
     const types = ctx.params.types;
-    const userType = ctx.meta.user.type;
-    return !types || !types.length || types.some((t) => t === userType);
+    if (types.includes(EndpointType.PUBLIC)) return true;
+
+    const userType = ctx.meta?.user?.type;
+    const isAdmin = [UserType.ADMIN].includes(userType);
+    const isSuperAdmin = [UserType.SUPER_ADMIN].includes(userType);
+    const isUser = [UserType.USER].includes(userType);
+
+    if (!types?.length) return true;
+
+    let valid = false;
+
+    if (types.includes(EndpointType.SUPER_ADMIN)) valid = valid || isSuperAdmin;
+    if (types.includes(EndpointType.ADMIN)) valid = valid || isAdmin;
+    if (types.includes(EndpointType.USER)) valid = valid || isUser;
+
+    return valid;
   }
 
   @Action({

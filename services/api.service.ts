@@ -2,7 +2,7 @@ import pick from 'lodash/pick';
 import moleculer, { Context, Errors } from 'moleculer';
 import { Action, Method, Service } from 'moleculer-decorators';
 import ApiGateway from 'moleculer-web';
-import { RequestMessage } from '../types';
+import { EndpointType, RequestMessage } from '../types';
 import { App } from './apps.service';
 import { User, UserType } from './users.service';
 import { Handlers } from '@sentry/node';
@@ -257,7 +257,8 @@ export default class ApiService extends moleculer.Service {
   ): Promise<unknown> {
     const auth = req.headers.authorization;
 
-    if (req.$action.auth === false) {
+    // console.log(auth, req.$action.auth, req.$route.path)
+    if (req.$action.auth === EndpointType.PUBLIC && !auth) {
       return Promise.resolve(null);
     }
 
@@ -312,7 +313,7 @@ export default class ApiService extends moleculer.Service {
   ): Promise<unknown> {
     const user = ctx.meta.user;
 
-    if (req.$action.auth === false) {
+    if (req.$action.auth === EndpointType.PUBLIC && !user) {
       return Promise.resolve(null);
     }
 

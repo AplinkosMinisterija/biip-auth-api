@@ -15,6 +15,7 @@ import {
   throwValidationError,
   DISABLE_REST_ACTIONS,
   throwBadRequestError,
+  EndpointType,
 } from '../types';
 
 import { companyCode as companyCodeChecker } from 'lt-codes';
@@ -254,14 +255,14 @@ export interface Group extends BaseModelInterface {
   actions: {
     ...DISABLE_REST_ACTIONS,
     create: {
-      types: [UserType.SUPER_ADMIN, UserType.ADMIN],
+      types: [EndpointType.ADMIN, EndpointType.SUPER_ADMIN],
     },
     update: {
-      types: [UserType.SUPER_ADMIN, UserType.ADMIN],
+      types: [EndpointType.ADMIN, EndpointType.SUPER_ADMIN],
     },
     remove: {
       rest: null,
-      types: [UserType.SUPER_ADMIN, UserType.ADMIN],
+      types: [EndpointType.ADMIN, EndpointType.SUPER_ADMIN],
     },
   },
 

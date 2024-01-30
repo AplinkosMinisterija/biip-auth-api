@@ -16,7 +16,7 @@ import {
 import { AppAuthMeta, AuthStrategy, UserAuthMeta } from './api.service';
 import { App } from './apps.service';
 import { User, UserType } from './users.service';
-import { throwBadRequestError, throwNotFoundError } from '../types';
+import { EndpointType, throwBadRequestError, throwNotFoundError } from '../types';
 
 @Service({
   name: 'auth',
@@ -73,7 +73,7 @@ export default class AuthService extends moleculer.Service {
         convert: true,
       },
     },
-    types: [UserType.SUPER_ADMIN],
+    types: [EndpointType.SUPER_ADMIN],
   })
   async impersonateUser(ctx: Context<{ userId: number }, AppAuthMeta>) {
     const { userId } = ctx.params;
