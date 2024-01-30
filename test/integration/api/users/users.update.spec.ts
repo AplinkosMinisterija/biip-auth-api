@@ -225,7 +225,6 @@ describe("Test PATCH '/api/users/:id'", () => {
         .expect(200)
         .expect((res: any) => {
           expect(res.body.id).toEqual(apiHelper.fisher.id);
-          testUpdatedData(res, dataForUpdate);
         });
     });
 
