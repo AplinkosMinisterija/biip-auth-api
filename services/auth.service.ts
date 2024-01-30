@@ -205,6 +205,10 @@ export default class AuthService extends moleculer.Service {
       },
     };
 
+    if (userInvitee.firstName && userInvitee.lastName) {
+      result.user.name = `${userInvitee.firstName} ${userInvitee.lastName}`;
+    }
+
     if (userAssigned) {
       const userInviter: User = await ctx.call('users.resolve', {
         id: userAssigned,
