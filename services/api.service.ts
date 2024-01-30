@@ -257,7 +257,6 @@ export default class ApiService extends moleculer.Service {
   ): Promise<unknown> {
     const auth = req.headers.authorization;
 
-    // console.log(auth, req.$action.auth, req.$route.path)
     if (req.$action.auth === EndpointType.PUBLIC && !auth) {
       return Promise.resolve(null);
     }
