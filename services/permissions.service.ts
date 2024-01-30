@@ -10,6 +10,7 @@ import {
   COMMON_FIELDS,
   COMMON_SCOPES,
   DISABLE_REST_ACTIONS,
+  EndpointType,
   throwBadRequestError,
   throwNotFoundError,
   throwUnauthorizedError,
@@ -182,7 +183,7 @@ export default class PermissionsService extends moleculer.Service {
 
   @Action({
     rest: 'GET /users',
-    auth: false,
+    auth: EndpointType.PUBLIC,
     params: {
       access: 'string',
       municipality: {
@@ -980,7 +981,13 @@ export default class PermissionsService extends moleculer.Service {
       fields: 'user',
     });
 
-    return [...usersIds.map((i) => i.user)];
+    const usersSet = new Set([...usersIds.map((i) => i.user)]);
+
+    if (!group) {
+      usersSet.add(user.id);
+    }
+
+    return [...usersSet];
   }
 
   @Method

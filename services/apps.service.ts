@@ -36,6 +36,7 @@ export interface App extends BaseModelInterface {
     isApp?: boolean;
     createUserOnEvartaiLogin: boolean;
     createCompanyOnEvartaiLogin: boolean;
+    canInviteSelf: boolean;
   };
 }
 
@@ -82,6 +83,10 @@ export interface App extends BaseModelInterface {
             default: false,
           },
           createCompanyOnEvartaiLogin: {
+            type: 'boolean',
+            default: false,
+          },
+          canInviteSelf: {
             type: 'boolean',
             default: false,
           },
