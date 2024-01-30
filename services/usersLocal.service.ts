@@ -309,11 +309,16 @@ export default class UsersLocalService extends moleculer.Service {
 
     await ctx.call('usersLocal.update', userLocalData);
 
-    const invitationQuery = generateHashAndSignatureQueryParams({
+    const queryData: any = {
       u: userLocal.id, // local user
       h: changeHash, // change hash
-      ua: ctx.meta.user?.id, // person assigned
-    });
+    };
+
+    if (ctx?.meta?.user?.id) {
+      queryData.ua = ctx.meta.user?.id; // person assigned
+    }
+
+    const invitationQuery = generateHashAndSignatureQueryParams(queryData);
 
     const user: User = await ctx.call('users.resolve', { id: userLocal.user });
 
