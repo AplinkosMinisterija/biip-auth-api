@@ -10,6 +10,7 @@ import {
   COMMON_FIELDS,
   COMMON_SCOPES,
   DISABLE_REST_ACTIONS,
+  EndpointType,
   FieldHookCallback,
   throwBadRequestError,
   throwNotFoundError,
