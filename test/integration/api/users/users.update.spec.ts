@@ -212,6 +212,23 @@ describe("Test PATCH '/api/users/:id'", () => {
         });
     });
 
+    it('Change password (self) in fishing app (success)', () => {
+      const dataForUpdate = getDataForUpdate({
+        oldPassword: apiHelper.goodPassword,
+        password: apiHelper.goodPasswordNew,
+      });
+
+      return request(apiService.server)
+        .patch(`${endpoint}/${apiHelper.fisher.id}`)
+        .set(apiHelper.getHeaders(apiHelper.fisherToken, apiHelper.appFishing.apiKey))
+        .send(dataForUpdate)
+        .expect(200)
+        .expect((res: any) => {
+          expect(res.body.id).toEqual(apiHelper.fisher.id);
+          testUpdatedData(res, dataForUpdate);
+        });
+    });
+
     it('Update super admin in admin app (invalid token)', () => {
       const dataForUpdate = getDataForUpdate();
       return request(apiService.server)

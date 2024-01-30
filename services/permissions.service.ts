@@ -981,7 +981,7 @@ export default class PermissionsService extends moleculer.Service {
       fields: 'user',
     });
 
-    return [...usersIds.map((i) => i.user)];
+    return [...new Set([...usersIds.map((i) => i.user), user.id])];
   }
 
   @Method

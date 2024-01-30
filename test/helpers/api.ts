@@ -103,6 +103,7 @@ export class ApiHelper {
 
   goodEmail = 'super.admin@am.lt';
   goodPassword = 'Slaptas123*';
+  goodPasswordNew = 'Slaptas123!';
   badEmail = 'superadmin@am';
   badPassword = 'Slaptas';
   emailFisher = 'user.fisher@am.lt';
