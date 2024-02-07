@@ -76,7 +76,7 @@
     "objection": "^3.0.1",
     "pg": "^8.7.3",
     "pg-hstore": "^2.3.4",
-    "postmark": "^3.0.11",
+    "postmark": "^4.0.2",
     "typescript": "^4.5.5"
   },
   "engines": {
