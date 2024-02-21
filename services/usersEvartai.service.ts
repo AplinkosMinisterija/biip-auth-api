@@ -7,10 +7,10 @@ import { companyCode as companyCodeChecker, personalCode as personalCodeChecker 
 
 import DbConnection from '../mixins/database.mixin';
 import {
-  COMMON_FIELDS,
-  COMMON_DEFAULT_SCOPES,
-  COMMON_SCOPES,
   BaseModelInterface,
+  COMMON_DEFAULT_SCOPES,
+  COMMON_FIELDS,
+  COMMON_SCOPES,
   FieldHookCallback,
   throwBadRequestError,
   throwNotFoundError,
@@ -268,6 +268,7 @@ export default class UsersEvartaiService extends moleculer.Service {
       role: {
         type: 'string',
         optional: true,
+        default: UserGroupRole.USER,
       },
       notify: {
         type: 'array',
@@ -375,7 +376,7 @@ export default class UsersEvartaiService extends moleculer.Service {
         id: userEvartai.user,
       });
 
-      const returnData = { ...user, personalCode };
+      const returnData: User & { role?: UserGroupRole } = { ...user, personalCode };
       const alreadyHadApp = await ctx.call('users.toggleApp', {
         id: userEvartai.user,
         appId: app.id,
@@ -402,7 +403,7 @@ export default class UsersEvartaiService extends moleculer.Service {
         const assignedToCompany = await this.assignUserToCompanyIfCompanyExists(
           company,
           user,
-          role || UserGroupRole.USER,
+          role,
         );
 
         if (!assignedToCompany) {
@@ -416,6 +417,8 @@ export default class UsersEvartaiService extends moleculer.Service {
             isValidCompanyCode ? 'AUTH_USER_ASSIGNED' : 'AUTH_USER_EXISTS',
           );
         }
+
+        returnData.role = role;
       }
 
       await sendInvitations();

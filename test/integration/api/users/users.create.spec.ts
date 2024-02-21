@@ -1,9 +1,10 @@
 'use strict';
+import { afterAll, beforeAll, describe, expect, it } from '@jest/globals';
+import { companyCode, personalCode } from 'lt-codes';
 import { ServiceBroker } from 'moleculer';
-import { ApiHelper, errors, serviceBrokerConfig, testUpdatedData } from '../../../helpers/api';
-import { expect, describe, beforeAll, afterAll, it } from '@jest/globals';
-import { UserType } from '../../../../services/users.service';
 import { UserGroupRole } from '../../../../services/userGroups.service';
+import { UserType } from '../../../../services/users.service';
+import { ApiHelper, errors, serviceBrokerConfig, testUpdatedData } from '../../../helpers/api';
 
 const request = require('supertest');
 
@@ -19,10 +20,20 @@ const initialize = async (broker: any) => {
   return true;
 };
 
+const getInviteGroupData = () => ({ companyCode: companyCode.generate() });
+
+const getInviteUserData = (additionalData = {}) => ({
+  personalCode: personalCode.generate(),
+  ...additionalData,
+});
+
 const removeUser = (id: string) => {
   return broker.call('users.removeUser', { id });
 };
 
+const removeGroup = (id: string) => {
+  return broker.call('groups.remove', { id });
+};
 const getUser = (id: any): Promise<any> => {
   return broker.call('users.findOne', { query: { id }, populate: 'groups' });
 };
@@ -51,6 +62,7 @@ describe("Test POST '/api/users'", () => {
   afterAll(() => broker.stop());
 
   const endpoint = '/api/users';
+  const inviteEndpoint = endpoint + '/invite';
 
   describe('Acting as super admin', () => {
     it('Create super admin in admin app (success)', async () => {
@@ -120,6 +132,85 @@ describe("Test POST '/api/users'", () => {
         });
 
       return removeUser(res.body.id);
+    });
+
+    it('Invite a group with its admin (success)', async () => {
+      const groupResponse = await request(apiService.server)
+        .post(inviteEndpoint)
+        .set(apiHelper.getHeaders(apiHelper.superAdminToken))
+        .send(getInviteGroupData())
+        .expect(200)
+        .expect((res: any) => {
+          expect(res.body.id).not.toBeUndefined();
+        });
+
+      const groupId = groupResponse?.body?.id;
+
+      const groupAdminResponse: any = await request(apiService.server)
+        .post(inviteEndpoint)
+        .set(apiHelper.getHeaders(apiHelper.superAdminToken))
+        .send(getInviteUserData({ role: UserType.ADMIN, companyId: groupId }))
+        .expect(200)
+        .expect((res: any) => {
+          expect(res.body?.role).toEqual(UserType.ADMIN);
+        });
+
+      const userId = groupAdminResponse?.body?.id;
+
+      await removeGroup(groupId);
+
+      await request(apiService.server)
+        .delete(`${endpoint}/${userId}`)
+        .set(apiHelper.getHeaders(apiHelper.superAdminToken))
+        .expect(200);
+    });
+
+    it('Invite a group with its user (success)', async () => {
+      const groupResponse = await request(apiService.server)
+        .post(inviteEndpoint)
+        .set(apiHelper.getHeaders(apiHelper.superAdminToken))
+        .send(getInviteGroupData())
+        .expect(200)
+        .expect((res: any) => {
+          expect(res.body.id).not.toBeUndefined();
+        });
+
+      const groupId = groupResponse?.body?.id;
+
+      const groupUserResponse: any = await request(apiService.server)
+        .post(inviteEndpoint)
+        .set(apiHelper.getHeaders(apiHelper.superAdminToken))
+        .send(getInviteUserData({ companyId: groupId }))
+        .expect(200)
+        .expect((res: any) => {
+          expect(res.body?.role).toEqual(UserType.USER);
+        });
+
+      const userId = groupUserResponse?.body?.id;
+
+      await removeGroup(groupId);
+      await request(apiService.server)
+        .delete(`${endpoint}/${userId}`)
+        .set(apiHelper.getHeaders(apiHelper.superAdminToken))
+        .expect(200);
+    });
+
+    it('Invite an user (success)', async () => {
+      const UserResponse: any = await request(apiService.server)
+        .post(inviteEndpoint)
+        .set(apiHelper.getHeaders(apiHelper.superAdminToken))
+        .send(getInviteUserData())
+        .expect(200)
+        .expect((res: any) => {
+          expect(res.body?.role).toEqual(undefined);
+        });
+
+      const userId = UserResponse?.body?.id;
+
+      await request(apiService.server)
+        .delete(`${endpoint}/${userId}`)
+        .set(apiHelper.getHeaders(apiHelper.superAdminToken))
+        .expect(200);
     });
 
     it('Create admin with groups (without unassigning) in admin app (success)', async () => {
