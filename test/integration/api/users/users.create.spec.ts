@@ -147,10 +147,10 @@ describe("Test POST '/api/users'", () => {
       const group: any = await inviteEvartaiGroup(meta);
       const groupAdmin: any = await inviteUser({ role: UserType.ADMIN, companyId: group.id }, meta);
 
+      expect(groupAdmin?.role).toStrictEqual(UserType.ADMIN);
+
       await removeGroup(group.id, meta);
       await removeUser(groupAdmin.id, meta);
-
-      return expect(groupAdmin?.role).toStrictEqual(UserType.ADMIN);
     });
 
     it('Invite a group with its user (success)', async () => {
@@ -160,10 +160,10 @@ describe("Test POST '/api/users'", () => {
 
       const groupUser: any = await inviteUser({ companyId: group.id }, meta);
 
+      expect(groupUser?.role).toStrictEqual(UserType.USER);
+
       await removeGroup(group.id, meta);
       await removeUser(groupUser.id, meta);
-
-      return expect(groupUser?.role).toStrictEqual(UserType.USER);
     });
 
     it('Invite an user (success)', async () => {
@@ -171,9 +171,9 @@ describe("Test POST '/api/users'", () => {
 
       const user: any = await inviteUser({}, meta);
 
-      await removeUser(user.id, meta);
+      expect(user?.role).toStrictEqual(undefined);
 
-      return expect(user?.role).toStrictEqual(undefined);
+      await removeUser(user.id, meta);
     });
 
     it('Create admin with groups (without unassigning) in admin app (success)', async () => {
