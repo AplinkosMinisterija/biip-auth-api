@@ -1,5 +1,6 @@
 'use strict';
 import { afterAll, beforeAll, describe, expect, it } from '@jest/globals';
+import { companyCode, personalCode } from 'lt-codes';
 import { ServiceBroker } from 'moleculer';
 import { UserGroupRole } from '../../../../services/userGroups.service';
 import { UserType } from '../../../../services/users.service';
@@ -20,15 +21,14 @@ const initialize = async (broker: any) => {
 };
 
 const inviteEvartaiGroup = (meta?: { [key: string]: any }) => {
-  return broker.call('usersEvartai.invite', { companyCode: '513903164' }, { meta });
+  return broker.call('usersEvartai.invite', { companyCode: companyCode.generate() }, { meta });
 };
 
 const inviteUser = (additionalData: { [key: string]: any }, meta?: { [key: string]: any }) => {
   return broker.call(
     'usersEvartai.invite',
     {
-      personalCode: '39909286436',
-      notify: ['test@email.test'],
+      personalCode: personalCode.generate(),
       ...additionalData,
     },
     { meta },
