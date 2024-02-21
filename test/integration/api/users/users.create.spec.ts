@@ -1,9 +1,9 @@
 'use strict';
+import { afterAll, beforeAll, describe, expect, it } from '@jest/globals';
 import { ServiceBroker } from 'moleculer';
-import { ApiHelper, errors, serviceBrokerConfig, testUpdatedData } from '../../../helpers/api';
-import { expect, describe, beforeAll, afterAll, it } from '@jest/globals';
-import { UserType } from '../../../../services/users.service';
 import { UserGroupRole } from '../../../../services/userGroups.service';
+import { UserType } from '../../../../services/users.service';
+import { ApiHelper, errors, serviceBrokerConfig, testUpdatedData } from '../../../helpers/api';
 
 const request = require('supertest');
 
@@ -19,8 +19,8 @@ const initialize = async (broker: any) => {
   return true;
 };
 
-const removeUser = (id: string) => {
-  return broker.call('users.removeUser', { id });
+const removeUser = (id: string, meta?: { [key: string]: any }) => {
+  return broker.call('users.removeUser', { id }, meta);
 };
 
 const getUser = (id: any): Promise<any> => {
@@ -120,6 +120,61 @@ describe("Test POST '/api/users'", () => {
         });
 
       return removeUser(res.body.id);
+    });
+
+    it('Create a group with its admin', async () => {
+      const meta = { app: apiHelper.appFishing };
+
+      const group: any = await broker.call(
+        'usersEvartai.invite',
+        { companyCode: '513903164' },
+        { meta },
+      );
+
+      const groupAdmin: any = await broker.call(
+        'usersEvartai.invite',
+        {
+          role: UserType.ADMIN,
+          companyId: group.id,
+          personalCode: '39909286436',
+          notify: ['test@email.test'],
+        },
+        {
+          meta,
+        },
+      );
+
+      await broker.call('groups.remove', { id: group.id }, { meta });
+      await removeUser(groupAdmin.id, { meta });
+
+      return expect(groupAdmin?.role).toStrictEqual(UserType.ADMIN);
+    });
+
+    it('Create a group with its user', async () => {
+      const meta = { app: apiHelper.appFishing };
+
+      const group: any = await broker.call(
+        'usersEvartai.invite',
+        { companyCode: '513903164' },
+        { meta },
+      );
+
+      const groupAdmin: any = await broker.call(
+        'usersEvartai.invite',
+        {
+          companyId: group.id,
+          personalCode: '39909286436',
+          notify: ['test@email.test'],
+        },
+        {
+          meta,
+        },
+      );
+
+      await broker.call('groups.remove', { id: group.id }, { meta });
+      await removeUser(groupAdmin.id, { meta });
+
+      return expect(groupAdmin?.role).toStrictEqual(UserType.USER);
     });
 
     it('Create admin with groups (without unassigning) in admin app (success)', async () => {
