@@ -3,14 +3,15 @@
 import bcrypt from 'bcryptjs';
 import moleculer, { Context } from 'moleculer';
 import { Action, Method, Service } from 'moleculer-decorators';
-
 import DbConnection from '../mixins/database.mixin';
 import {
   BaseModelInterface,
   COMMON_DEFAULT_SCOPES,
   COMMON_FIELDS,
   COMMON_SCOPES,
+  EndpointType,
   FieldHookCallback,
+  throwNoTokenError,
   throwNotFoundError,
   throwUnauthorizedError,
 } from '../types';
@@ -201,6 +202,7 @@ export default class UsersLocalService extends moleculer.Service {
       path: '/',
       basePath: '/users',
     },
+    auth: EndpointType.PUBLIC,
     params: {
       email: 'string',
       groups: {
@@ -237,12 +239,19 @@ export default class UsersLocalService extends moleculer.Service {
         doNotSendEmail: boolean;
         unassignExistingGroups: boolean;
       },
-      AppAuthMeta & UserAuthMeta
+      AppAuthMeta & UserAuthMeta & { hasPermissions: boolean }
     >,
   ) {
     const { meta } = ctx;
 
     const appId = meta?.app?.id;
+
+    const hasPermissions =
+      !!meta?.user?.id || !!meta?.app?.settings?.canInviteSelf || !!meta?.hasPermissions;
+
+    if (!hasPermissions) {
+      throwNoTokenError();
+    }
 
     if (meta.user?.type === UserType.USER) {
       ctx.params.apps = [appId];
@@ -300,11 +309,16 @@ export default class UsersLocalService extends moleculer.Service {
 
     await ctx.call('usersLocal.update', userLocalData);
 
-    const invitationQuery = generateHashAndSignatureQueryParams({
+    const queryData: any = {
       u: userLocal.id, // local user
       h: changeHash, // change hash
-      ua: ctx.meta.user?.id, // person assigned
-    });
+    };
+
+    if (ctx?.meta?.user?.id) {
+      queryData.ua = ctx.meta.user?.id; // person assigned
+    }
+
+    const invitationQuery = generateHashAndSignatureQueryParams(queryData);
 
     const user: User = await ctx.call('users.resolve', { id: userLocal.user });
 

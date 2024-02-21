@@ -413,4 +413,34 @@ describe("Test POST '/api/users'", () => {
         });
     });
   });
+
+  describe('Creating without token', () => {
+    it('Create user in app where user cannot invite self (fail)', () => {
+      const createData = getDataForCreate({
+        groups: [{ id: apiHelper.groupFishersCompany.id, role: 'USER' }],
+      });
+      return request(apiService.server)
+        .post(endpoint)
+        .set(apiHelper.getHeaders(null, apiHelper.appFishing.apiKey))
+        .send(createData)
+        .expect(401)
+        .expect((res: any) => {
+          expect(res.body.type).toEqual(errors.NO_TOKEN);
+        });
+    });
+
+    it('Create user in app where user can invite self (success)', () => {
+      const createData = getDataForCreate({
+        groups: [{ id: apiHelper.groupSelfUsers.id, role: 'USER' }],
+      });
+      return request(apiService.server)
+        .post(endpoint)
+        .set(apiHelper.getHeaders(null, apiHelper.appSelfUsers.apiKey))
+        .send(createData)
+        .expect(200)
+        .expect((res: any) => {
+          expect(res.body.id).not.toBeUndefined();
+        });
+    });
+  });
 });

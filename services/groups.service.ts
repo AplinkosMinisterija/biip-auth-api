@@ -10,6 +10,7 @@ import {
   COMMON_FIELDS,
   COMMON_SCOPES,
   DISABLE_REST_ACTIONS,
+  EndpointType,
   FieldHookCallback,
   throwBadRequestError,
   throwNotFoundError,
@@ -255,14 +256,14 @@ export interface Group extends BaseModelInterface {
   actions: {
     ...DISABLE_REST_ACTIONS,
     create: {
-      types: [UserType.SUPER_ADMIN, UserType.ADMIN],
+      types: [EndpointType.ADMIN, EndpointType.SUPER_ADMIN],
     },
     update: {
-      types: [UserType.SUPER_ADMIN, UserType.ADMIN],
+      types: [EndpointType.ADMIN, EndpointType.SUPER_ADMIN],
     },
     remove: {
       rest: null,
-      types: [UserType.SUPER_ADMIN, UserType.ADMIN],
+      types: [EndpointType.ADMIN, EndpointType.SUPER_ADMIN],
     },
   },
 

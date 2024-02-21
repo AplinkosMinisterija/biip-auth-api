@@ -44,7 +44,7 @@ const createUser = (
     createData.apps = [appId || apiHelper.appAdmin.id];
   }
 
-  return broker.call('usersLocal.invite', createData);
+  return broker.call('usersLocal.invite', createData, apiHelper.userLocalInviteMeta);
 };
 
 const createGroup = (apps?: any[]): Promise<User> => {
