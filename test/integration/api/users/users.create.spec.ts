@@ -147,7 +147,7 @@ describe("Test POST '/api/users'", () => {
       const group: any = await inviteEvartaiGroup(meta);
       const groupAdmin: any = await inviteUser({ role: UserType.ADMIN, companyId: group.id }, meta);
 
-      expect(groupAdmin?.role).toStrictEqual(UserType.ADMIN);
+      expect(groupAdmin?.role).toEqual(UserType.ADMIN);
 
       await removeGroup(group.id, meta);
       await removeUser(groupAdmin.id, meta);
@@ -160,7 +160,7 @@ describe("Test POST '/api/users'", () => {
 
       const groupUser: any = await inviteUser({ companyId: group.id }, meta);
 
-      expect(groupUser?.role).toStrictEqual(UserType.USER);
+      expect(groupUser?.role).toEqual(UserType.USER);
 
       await removeGroup(group.id, meta);
       await removeUser(groupUser.id, meta);
@@ -171,7 +171,7 @@ describe("Test POST '/api/users'", () => {
 
       const user: any = await inviteUser({}, meta);
 
-      expect(user?.role).toStrictEqual(undefined);
+      expect(user?.role).toEqual(undefined);
 
       await removeUser(user.id, meta);
     });
