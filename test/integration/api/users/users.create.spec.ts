@@ -23,10 +23,7 @@ const inviteEvartaiGroup = (meta?: { [key: string]: any }) => {
   return broker.call('usersEvartai.invite', { companyCode: '513903164' }, { meta });
 };
 
-const inviteEvartaiGroupUser = (
-  additionalData: { [key: string]: any },
-  meta?: { [key: string]: any },
-) => {
+const inviteUser = (additionalData: { [key: string]: any }, meta?: { [key: string]: any }) => {
   return broker.call(
     'usersEvartai.invite',
     {
@@ -39,13 +36,12 @@ const inviteEvartaiGroupUser = (
 };
 
 const removeUser = (id: string, meta?: { [key: string]: any }) => {
-  return broker.call('users.removeUser', { id }, meta);
+  return broker.call('users.removeUser', { id }, { meta });
 };
 
 const removeGroup = (id: string, meta?: { [key: string]: any }) => {
   return broker.call('groups.remove', { id }, { meta });
 };
-
 const getUser = (id: any): Promise<any> => {
   return broker.call('users.findOne', { query: { id }, populate: 'groups' });
 };
@@ -145,14 +141,11 @@ describe("Test POST '/api/users'", () => {
       return removeUser(res.body.id);
     });
 
-    it('Invite a group with its admin', async () => {
+    it('Invite a group with its admin (success)', async () => {
       const meta = { app: apiHelper.appFishing };
 
-      const group: any = inviteEvartaiGroup(meta);
-      const groupAdmin: any = inviteEvartaiGroupUser(
-        { role: UserType.ADMIN, companyId: group.id },
-        meta,
-      );
+      const group: any = await inviteEvartaiGroup(meta);
+      const groupAdmin: any = await inviteUser({ role: UserType.ADMIN, companyId: group.id }, meta);
 
       await removeGroup(group.id, meta);
       await removeUser(groupAdmin.id, meta);
@@ -160,17 +153,27 @@ describe("Test POST '/api/users'", () => {
       return expect(groupAdmin?.role).toStrictEqual(UserType.ADMIN);
     });
 
-    it('Invite a group with its user', async () => {
+    it('Invite a group with its user (success)', async () => {
       const meta = { app: apiHelper.appFishing };
 
-      const group: any = inviteEvartaiGroup(meta);
+      const group: any = await inviteEvartaiGroup(meta);
 
-      const groupAdmin: any = inviteEvartaiGroupUser({ companyId: group.id }, meta);
+      const groupUser: any = await inviteUser({ companyId: group.id }, meta);
 
       await removeGroup(group.id, meta);
-      await removeUser(groupAdmin.id, meta);
+      await removeUser(groupUser.id, meta);
 
-      return expect(groupAdmin?.role).toStrictEqual(UserType.USER);
+      return expect(groupUser?.role).toStrictEqual(UserType.USER);
+    });
+
+    it('Invite an user (success)', async () => {
+      const meta = { app: apiHelper.appFishing };
+
+      const user: any = await inviteUser({}, meta);
+
+      await removeUser(user.id, meta);
+
+      return expect(user?.role).toStrictEqual(undefined);
     });
 
     it('Create admin with groups (without unassigning) in admin app (success)', async () => {
