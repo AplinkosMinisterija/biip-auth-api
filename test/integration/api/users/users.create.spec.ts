@@ -19,8 +19,31 @@ const initialize = async (broker: any) => {
   return true;
 };
 
+const inviteEvartaiGroup = (meta?: { [key: string]: any }) => {
+  return broker.call('usersEvartai.invite', { companyCode: '513903164' }, { meta });
+};
+
+const inviteEvartaiGroupUser = (
+  additionalData: { [key: string]: any },
+  meta?: { [key: string]: any },
+) => {
+  return broker.call(
+    'usersEvartai.invite',
+    {
+      personalCode: '39909286436',
+      notify: ['test@email.test'],
+      ...additionalData,
+    },
+    { meta },
+  );
+};
+
 const removeUser = (id: string, meta?: { [key: string]: any }) => {
   return broker.call('users.removeUser', { id }, meta);
+};
+
+const removeGroup = (id: string, meta?: { [key: string]: any }) => {
+  return broker.call('groups.remove', { id }, { meta });
 };
 
 const getUser = (id: any): Promise<any> => {
@@ -122,57 +145,30 @@ describe("Test POST '/api/users'", () => {
       return removeUser(res.body.id);
     });
 
-    it('Create a group with its admin', async () => {
+    it('Invite a group with its admin', async () => {
       const meta = { app: apiHelper.appFishing };
 
-      const group: any = await broker.call(
-        'usersEvartai.invite',
-        { companyCode: '513903164' },
-        { meta },
+      const group: any = inviteEvartaiGroup(meta);
+      const groupAdmin: any = inviteEvartaiGroupUser(
+        { role: UserType.ADMIN, companyId: group.id },
+        meta,
       );
 
-      const groupAdmin: any = await broker.call(
-        'usersEvartai.invite',
-        {
-          role: UserType.ADMIN,
-          companyId: group.id,
-          personalCode: '39909286436',
-          notify: ['test@email.test'],
-        },
-        {
-          meta,
-        },
-      );
-
-      await broker.call('groups.remove', { id: group.id }, { meta });
-      await removeUser(groupAdmin.id, { meta });
+      await removeGroup(group.id, meta);
+      await removeUser(groupAdmin.id, meta);
 
       return expect(groupAdmin?.role).toStrictEqual(UserType.ADMIN);
     });
 
-    it('Create a group with its user', async () => {
+    it('Invite a group with its user', async () => {
       const meta = { app: apiHelper.appFishing };
 
-      const group: any = await broker.call(
-        'usersEvartai.invite',
-        { companyCode: '513903164' },
-        { meta },
-      );
+      const group: any = inviteEvartaiGroup(meta);
 
-      const groupAdmin: any = await broker.call(
-        'usersEvartai.invite',
-        {
-          companyId: group.id,
-          personalCode: '39909286436',
-          notify: ['test@email.test'],
-        },
-        {
-          meta,
-        },
-      );
+      const groupAdmin: any = inviteEvartaiGroupUser({ companyId: group.id }, meta);
 
-      await broker.call('groups.remove', { id: group.id }, { meta });
-      await removeUser(groupAdmin.id, { meta });
+      await removeGroup(group.id, meta);
+      await removeUser(groupAdmin.id, meta);
 
       return expect(groupAdmin?.role).toStrictEqual(UserType.USER);
     });
