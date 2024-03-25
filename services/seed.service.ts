@@ -14,7 +14,7 @@ export default class SeedService extends moleculer.Service {
     const adminEmail = process.env.DEFAULT_SUPER_ADMIN_EMAIL || 'superadmin@am.lt';
     const adminPassword = process.env.DEFAULT_SUPER_ADMIN_PASSWORD || 'Slaptazodis1@';
     const adminAppUrl = process.env.DEFAULT_ADMIN_APP_URL || 'https://admin.biip.lt';
-    const projectNameGenetive = process.env.DEFAULT_PROJECT_NAME_GENETIVE || 'BĮIP';
+    const projectNameGenitive = process.env.DEFAULT_PROJECT_NAME_GENITIVE || 'BĮIP';
     const adminAppExists = await ctx.call('apps.count', { query: { type: AppType.ADMIN } });
     const usersAppExists = await ctx.call('apps.count', { query: { type: AppType.USERS } });
     const userExists = await ctx.call('users.count', { query: { email: adminEmail } });
@@ -26,7 +26,7 @@ export default class SeedService extends moleculer.Service {
         type: AppType.ADMIN,
         url: adminAppUrl,
         settings: {
-          productNameTo: `${projectNameGenetive} administravimo sistemos`,
+          productNameTo: `${projectNameGenitive} administravimo sistemos`,
         },
       });
     }
@@ -38,7 +38,7 @@ export default class SeedService extends moleculer.Service {
         type: AppType.USERS,
         url: adminAppUrl,
         settings: {
-          productNameTo: `${projectNameGenetive} naudotojų valdymo sistemos`,
+          productNameTo: `${projectNameGenitive} naudotojų valdymo sistemos`,
         },
       });
     }
