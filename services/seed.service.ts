@@ -11,7 +11,7 @@ import { AppType } from './apps.service';
 export default class SeedService extends moleculer.Service {
   @Action()
   async real(ctx: Context<Record<string, unknown>>) {
-    const adminEmail = process.env.DEFAULT_SUPER_ADMIN_EMAIL || 'superadmin@biip.lt';
+    const adminEmail = process.env.DEFAULT_SUPER_ADMIN_EMAIL || 'superadmin@am.lt';
     const adminAppExists = await ctx.call('apps.count', { query: { type: AppType.ADMIN } });
     const usersAppExists = await ctx.call('apps.count', { query: { type: AppType.USERS } });
     const userExists = await ctx.call('users.count', { query: { email: adminEmail } });
