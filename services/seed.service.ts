@@ -12,6 +12,9 @@ export default class SeedService extends moleculer.Service {
   @Action()
   async real(ctx: Context<Record<string, unknown>>) {
     const adminEmail = process.env.DEFAULT_SUPER_ADMIN_EMAIL || 'superadmin@am.lt';
+    const adminPassword = process.env.DEFAULT_SUPER_ADMIN_PASSWORD || 'Slaptazodis1@';
+    const adminAppUrl = process.env.DEFAULT_ADMIN_APP_URL || 'https://admin.biip.lt';
+    const projectNameGenetive = process.env.DEFAULT_PROJECT_NAME_GENETIVE || 'BĮIP';
     const adminAppExists = await ctx.call('apps.count', { query: { type: AppType.ADMIN } });
     const usersAppExists = await ctx.call('apps.count', { query: { type: AppType.USERS } });
     const userExists = await ctx.call('users.count', { query: { email: adminEmail } });
@@ -21,9 +24,9 @@ export default class SeedService extends moleculer.Service {
       await ctx.call('apps.create', {
         name: 'Admin',
         type: AppType.ADMIN,
-        url: 'https://admin.biip.lt',
+        url: adminAppUrl,
         settings: {
-          productNameTo: 'BĮIP administravimo sistemos',
+          productNameTo: `${projectNameGenetive} administravimo sistemos`,
         },
       });
     }
@@ -33,22 +36,22 @@ export default class SeedService extends moleculer.Service {
       await ctx.call('apps.create', {
         name: 'Vidiniai naudotojai',
         type: AppType.USERS,
-        url: 'https://admin.biip.lt',
+        url: adminAppUrl,
         settings: {
-          productNameTo: 'BĮĮP naudotojų valdymo sistemos',
+          productNameTo: `${projectNameGenetive} naudotojų valdymo sistemos`,
         },
       });
     }
 
     if (!userExists) {
-      // create local user
+      // create super admin user
       await ctx.call(
         'usersLocal.invite',
         {
           email: adminEmail,
           firstName: 'Super',
           lastName: 'Admin',
-          password: 'Slaptazodis1@',
+          password: adminPassword,
           phone: '+37060000000',
           type: UserType.SUPER_ADMIN,
           doNotSendEmail: true,
