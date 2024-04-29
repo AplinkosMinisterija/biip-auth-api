@@ -22,6 +22,7 @@ import { Group } from './groups.service';
 import { UserGroup, UserGroupRole } from './userGroups.service';
 
 import { User } from './users.service';
+import { AuthControllerService, OpenAPI } from '../generated/viisp-auth-helper-client';
 
 interface UserEvartaiHelper {
   firstName?: string;
@@ -233,10 +234,10 @@ export default class UsersEvartaiService extends moleculer.Service {
   })
   async sign(ctx: Context<{ host: string }>) {
     try {
-      return fetch(`${process.env.EVARTAI_HOST}/auth/sign`, {
-        method: 'POST',
-        body: JSON.stringify({ host: ctx.params.host }),
-      }).then((r) => r.json());
+      OpenAPI.BASE = process.env.EVARTAI_HOST;
+      return await AuthControllerService.generateTicket({
+        requestBody: JSON.stringify({ host: ctx.params.host }),
+      });
     } catch (err) {
       return throwBadRequestError('Cannot sign ticket', err);
     }
@@ -637,8 +638,8 @@ export default class UsersEvartaiService extends moleculer.Service {
     let userData: any;
 
     try {
-      const url = `${process.env.EVARTAI_HOST}/auth/data?ticket=${ticket}`;
-      userData = await fetch(url).then((r) => r.json());
+      OpenAPI.BASE = process.env.EVARTAI_HOST;
+      userData = AuthControllerService.getAuthData({ ticket });
     } catch (err) {
       throwBadRequestError('Cannot parse ticket', err);
     }
@@ -648,13 +649,13 @@ export default class UsersEvartaiService extends moleculer.Service {
     const user: UserEvartaiHelper = {
       firstName: userData.firstName,
       lastName: userData.lastName,
-      personalCode: userData['lt-personal-code'],
+      personalCode: userData.personalCode,
       email: userData.email,
-      phone: userData.phoneNumber,
-      companyCode: userData['lt-company-code'],
+      phone: userData.phone,
+      companyCode: userData.companyCode,
       companyName: userData.companyName,
       companyEmail: userData.email,
-      companyPhone: userData.phoneNumber,
+      companyPhone: userData.phone,
     };
 
     return user;
