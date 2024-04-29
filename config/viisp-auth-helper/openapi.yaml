@@ -1,0 +1,69 @@
+openapi: 3.0.1
+info:
+  title: OpenAPI definition
+  version: v0
+paths:
+  /auth/sign:
+    post:
+      tags:
+      - auth-controller
+      operationId: generateTicket
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: string
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerateTicketResponse'
+  /auth/data:
+    get:
+      tags:
+      - auth-controller
+      operationId: getAuthData
+      parameters:
+      - name: ticket
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDataResponse'
+components:
+  schemas:
+    GenerateTicketResponse:
+      type: object
+      properties:
+        ticket:
+          type: string
+        host:
+          type: string
+        url:
+          type: string
+    UserDataResponse:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        personalCode:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        companyCode:
+          type: string
+        companyName:
+          type: string
