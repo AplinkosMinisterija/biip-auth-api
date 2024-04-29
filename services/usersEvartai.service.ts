@@ -648,10 +648,10 @@ export default class UsersEvartaiService extends moleculer.Service {
     const user: UserEvartaiHelper = {
       firstName: userData.firstName,
       lastName: userData.lastName,
-      personalCode: userData['lt-personal-code'],
+      personalCode: userData.personalCode,
       email: userData.email,
       phone: userData.phoneNumber,
-      companyCode: userData['lt-company-code'],
+      companyCode: userData.companyCode,
       companyName: userData.companyName,
       companyEmail: userData.email,
       companyPhone: userData.phoneNumber,
