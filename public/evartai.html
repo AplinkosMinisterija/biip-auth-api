@@ -162,7 +162,7 @@
         var params = new URLSearchParams(window.location.search);
 
         if (params.has('ticket')) {
-          return 'medziokle://login?ticket=' + params.get('ticket');
+          return 'https://dev-medziokle.biip.lt/?ticket=' + params.get('ticket');
         }
 
         return false;
@@ -209,8 +209,6 @@
       <a href="#" onclick="return returnApp()" style="display: none" id="btn"
         >Grįžti į programėlę</a
       >
-
-      <a href="#" onclick="window.close()">Uždaryti</a>
     </div>
   </body>
 </html>
