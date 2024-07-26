@@ -162,7 +162,7 @@
         var params = new URLSearchParams(window.location.search);
 
         if (params.has('ticket')) {
-          return 'https://dev-zurnalas.biip.lt/?ticket=' + params.get('ticket');
+          return 'medziokle://dev-zurnalas.biip.lt/?ticket=' + params.get('ticket');
         }
 
         return false;
