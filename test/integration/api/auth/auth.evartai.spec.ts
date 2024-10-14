@@ -65,19 +65,19 @@ describe("Test '/auth' endpoints", () => {
   beforeAll(() => initialize(broker));
   afterAll(() => broker.stop());
 
-  // describe("Test '/auth/evartai/sign' endpoint", () => {
-  //   const evartaiSignEndpoint = '/auth/evartai/sign';
+  describe("Test '/auth/evartai/sign' endpoint", () => {
+    const evartaiSignEndpoint = '/auth/evartai/sign';
 
-  //   it('Without host', () => {
-  //     return request(apiService.server)
-  //       .post(evartaiSignEndpoint)
-  //       .set(apiHelper.getHeaders())
-  //       .expect(422)
-  //       .expect((res: any) => {
-  //         validationErrorValidateFields(res, ['host']);
-  //       });
-  //   });
-  // });
+    it('Without host', () => {
+      return request(apiService.server)
+        .post(evartaiSignEndpoint)
+        .set(apiHelper.getHeaders())
+        .expect(422)
+        .expect((res: any) => {
+          validationErrorValidateFields(res, ['host']);
+        });
+    });
+  });
 
   describe("Test '/auth/evartai/login' endpoint", () => {
     const evartaiLoginEndpoint = '/auth/evartai/login';
