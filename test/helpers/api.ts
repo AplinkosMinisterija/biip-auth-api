@@ -31,7 +31,7 @@ const servicesWithTables = [
 
 export const serviceBrokerConfig: BrokerOptions = {
   ...config,
-  ...{ logLevel: 'fatal' },
+  ...{ logLevel: 'warn' },
 };
 
 export const errors = {
