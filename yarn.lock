@@ -344,10 +344,10 @@
   resolved "https://registry.yarnpkg.com/@eslint/js/-/js-8.53.0.tgz#bea56f2ed2b5baea164348ff4d5a879f6f81f20d"
   integrity sha512-Kn7K8dx/5U6+cT1yEhpX1w4PCSg0M+XyRILPgvwcEBjerFWCwQj5sbr3/VmxqV0JGHCBCzyd6LxypEuehypY1w==
 
-"@faker-js/faker@^6.0.0-alpha.7":
-  version "6.3.1"
-  resolved "https://registry.yarnpkg.com/@faker-js/faker/-/faker-6.3.1.tgz#1ae963dd40405450a2945408cba553e1afa3e0fb"
-  integrity sha512-8YXBE2ZcU/pImVOHX7MWrSR/X5up7t6rPWZlk34RwZEcdr3ua6X+32pSd6XuOQRN+vbuvYNfA6iey8NbrjuMFQ==
+"@faker-js/faker@^9.0.3":
+  version "9.0.3"
+  resolved "https://registry.yarnpkg.com/@faker-js/faker/-/faker-9.0.3.tgz#be817db896b07d1716bc65d9aad1ba587b499826"
+  integrity sha512-lWrrK4QNlFSU+13PL9jMbMKLJYXDFu3tQfayBsMXX7KL/GiQeqfB1CzHkqD5UHBUtPAuPo6XwGbMFNdVMZObRA==
 
 "@fastify/busboy@^1.0.0":
   version "1.2.1"
