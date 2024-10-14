@@ -81,10 +81,8 @@ export interface User extends BaseModelInterface {
       },
 
       fullName: {
-        virtual: true,
         type: 'string',
-        get: ({ entity }: FieldHookCallback) =>
-          entity.firstName && entity.lastName ? `${entity.firstName} ${entity.lastName}` : '',
+        readonly: true,
       },
 
       invited: {
