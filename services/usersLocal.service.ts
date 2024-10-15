@@ -681,7 +681,7 @@ export default class UsersLocalService extends moleculer.Service {
       if (groups && !groups.length) {
         // required if unassigning apps as well OR user has no apps right now
         userInfoCanBeChanged =
-          userInfoCanBeChanged && !!(apps?.length || userToUpdate.apps?.length);
+          userInfoCanBeChanged && !!(apps?.length || userToUpdate?.apps?.length);
       }
 
       // unassigning apps

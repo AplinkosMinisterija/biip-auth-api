@@ -3,6 +3,7 @@ import { ServiceBroker } from 'moleculer';
 import { ApiHelper, errors, serviceBrokerConfig } from '../../../helpers/api';
 import { expect, describe, beforeAll, afterAll, it } from '@jest/globals';
 import { faker } from '@faker-js/faker';
+import { normalizeName } from '../../../../utils';
 
 const request = require('supertest');
 
@@ -27,8 +28,8 @@ const validationErrorValidateFields = (res: any, fieldsToCheck: Array<string>) =
 };
 
 const getUserData = () => ({
-  firstName: faker.person.firstName(),
-  lastName: faker.person.lastName(),
+  firstName: normalizeName(faker.person.firstName()),
+  lastName: normalizeName(faker.person.lastName()),
   email: faker.internet.email().toLowerCase(),
   phone: faker.phone.number({ style: 'international' }),
 });
@@ -201,7 +202,6 @@ describe("Test '/auth' endpoints", () => {
         })
         .set(apiHelper.getHeaders(null, apiHelper.appCreateOnLogin.apiKey))
         .expect(400);
-
     });
   });
 });

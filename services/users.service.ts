@@ -630,7 +630,7 @@ export default class UsersService extends moleculer.Service {
     const userGroupsCount: number = await ctx.call('userGroups.count', {
       query: { user: userId },
     });
-    const user: User = await ctx.call('users.resolve', { id: userId });
+    const user: User = await ctx.call('users.resolve', { id: userId, throwIfNotExist: true });
     if (!userGroupsCount && user.type === UserType.ADMIN && !user.apps.length) {
       await ctx.call('users.removeUser', { id: userId });
     }

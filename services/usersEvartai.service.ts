@@ -15,7 +15,7 @@ import {
   throwBadRequestError,
   throwNotFoundError,
 } from '../types';
-import { emailCanBeSent, sendEvartaiInvitationEmail } from '../utils';
+import { emailCanBeSent, normalizeName, sendEvartaiInvitationEmail } from '../utils';
 import { AppAuthMeta, UserAuthMeta } from './api.service';
 import { App } from './apps.service';
 import { Group } from './groups.service';
@@ -183,25 +183,6 @@ export default class UsersEvartaiService extends moleculer.Service {
     }
 
     // update on every login via evartai
-    const normalizeName = (words: string) => {
-      if (!words) return;
-      const makeWordUpperCase = (word: string) => {
-        return word.charAt(0).toUpperCase() + word.substring(1);
-      };
-
-      const normalizeWords = (words: string, delimiter: string = ' ') => {
-        return words
-          .split(delimiter)
-          .map((word: string) => makeWordUpperCase(word))
-          .join(delimiter);
-      };
-
-      words = words.toLowerCase();
-      words = normalizeWords(words, ' ');
-      words = normalizeWords(words, '-');
-      return words;
-    };
-
     await ctx.call('users.update', {
       id: user.id,
       firstName: normalizeName(userData.firstName),
