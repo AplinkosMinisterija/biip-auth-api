@@ -167,16 +167,16 @@ export interface User extends BaseModelInterface {
         type: 'array',
         virtual: true,
         items: { type: 'object' },
-        populate(ctx: any, _values: any, items: any[]) {
-          return Promise.all(
-            items.map(async (item: any) => {
-              const appsIds: Array<any> = await ctx.call('inheritedUserApps.getAppsByUser', {
-                user: item.id,
-              });
-              if (!appsIds.length) return [];
-              return ctx.call('apps.resolve', { id: appsIds });
-            }),
-          );
+        populate: {
+          keyField: 'id',
+          async handler(ctx: any, userIds: number[], items: any[]) {
+            if (!userIds?.length) return;
+
+            return ctx.call('inheritedUserApps.getAppsByUser', {
+              user: userIds,
+              populate: 'inheritedApps',
+            });
+          },
         },
       },
 
