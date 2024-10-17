@@ -24,7 +24,7 @@ describe("Test GET '/api/apps'", () => {
   const endpoint = '/api/apps';
 
   describe('Acting as super admin', () => {
-    it('Apps count equal to 4 in admin app', () => {
+    it('Apps count equal to 5 in admin app', () => {
       return request(apiService.server)
         .get(endpoint)
         .set(apiHelper.getHeaders(apiHelper.superAdminToken))
@@ -35,11 +35,12 @@ describe("Test GET '/api/apps'", () => {
             apiHelper.appFishing.id,
             apiHelper.appHunting.id,
             apiHelper.appSelfUsers.id,
+            apiHelper.appCreateOnLogin.id,
           ]);
         });
     });
 
-    it('Apps count equal to 4 in fishing app', () => {
+    it('Apps count equal to 5 in fishing app', () => {
       return request(apiService.server)
         .get(endpoint)
         .set(apiHelper.getHeaders(apiHelper.superAdminToken, apiHelper.appFishing.apiKey))
@@ -50,6 +51,7 @@ describe("Test GET '/api/apps'", () => {
             apiHelper.appFishing.id,
             apiHelper.appHunting.id,
             apiHelper.appSelfUsers.id,
+            apiHelper.appCreateOnLogin.id,
           ]);
         });
     });

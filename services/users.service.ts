@@ -289,14 +289,8 @@ export default class UsersService extends moleculer.Service {
 
   @Action({
     params: {
-      id: {
-        type: 'number',
-        convert: true,
-      },
-      appId: {
-        type: 'number',
-        convert: true,
-      },
+      id: 'number|convert',
+      appId: 'number|convert',
       append: {
         type: 'boolean',
         default: true,
@@ -308,7 +302,7 @@ export default class UsersService extends moleculer.Service {
 
     const user: User = await ctx.call('users.resolve', { id });
 
-    if (!user || !user.id) return false;
+    if (!user?.id) return false;
 
     const { changed, items } = toggleItemInArray(user.apps || [], appId, append);
 
@@ -636,7 +630,7 @@ export default class UsersService extends moleculer.Service {
     const userGroupsCount: number = await ctx.call('userGroups.count', {
       query: { user: userId },
     });
-    const user: User = await ctx.call('users.resolve', { id: userId });
+    const user: User = await ctx.call('users.resolve', { id: userId, throwIfNotExist: true });
     if (!userGroupsCount && user.type === UserType.ADMIN && !user.apps.length) {
       await ctx.call('users.removeUser', { id: userId });
     }

@@ -15,7 +15,7 @@ import {
   throwBadRequestError,
   throwNotFoundError,
 } from '../types';
-import { emailCanBeSent, sendEvartaiInvitationEmail } from '../utils';
+import { emailCanBeSent, normalizeName, sendEvartaiInvitationEmail } from '../utils';
 import { AppAuthMeta, UserAuthMeta } from './api.service';
 import { App } from './apps.service';
 import { Group } from './groups.service';
@@ -33,13 +33,12 @@ interface UserEvartaiHelper {
   companyName?: string;
   companyEmail?: string;
   companyPhone?: string;
+  originalData?: { [key: string]: any };
 }
 
 export interface UserEvartai extends BaseModelInterface {
   user: number | User;
   personalCode?: string;
-  // companyCode?: string;
-  // companyName?: string;
 }
 
 @Service({
@@ -116,6 +115,10 @@ export default class UsersEvartaiService extends moleculer.Service {
     const { app } = meta;
     const appId = app.id;
 
+    if (!personalCode) {
+      throwBadRequestError('Personal code is not defined', { userData, ticket });
+    }
+
     const company: Group = await this.getCompanyFromCode(userData.companyCode, {
       companyName: userData.companyName,
       companyEmail: userData.companyEmail,
@@ -168,10 +171,8 @@ export default class UsersEvartaiService extends moleculer.Service {
 
     const user: User = await ctx.call('users.resolve', {
       id: userEvartai.user,
+      throwIfNotExist: true,
     });
-    if (!user) {
-      throwNotFoundError('User not found');
-    }
 
     // default assignment to group
     if (defaultGroupId) {
@@ -182,36 +183,12 @@ export default class UsersEvartaiService extends moleculer.Service {
     }
 
     // update on every login via evartai
-    const normalizeName = (words: string) => {
-      if (!words) return;
-      const makeWordUpperCase = (word: string) => {
-        return word.charAt(0).toUpperCase() + word.substring(1);
-      };
-
-      const normalizeWords = (words: string, delimiter: string = ' ') => {
-        return words
-          .split(delimiter)
-          .map((word: string) => makeWordUpperCase(word))
-          .join(delimiter);
-      };
-
-      words = words.toLowerCase();
-      words = normalizeWords(words, ' ');
-      words = normalizeWords(words, '-');
-      return words;
-    };
-
     await ctx.call('users.update', {
       id: user.id,
       firstName: normalizeName(userData.firstName),
       lastName: normalizeName(userData.lastName),
       email: userData.email?.toLowerCase(),
       phone: userData.phone?.toLowerCase(),
-    });
-
-    await ctx.call('usersEvartai.update', {
-      id: userEvartai.id,
-      personalCode: userData.personalCode,
     });
 
     this.assignUserToCompanyIfCompanyExists(company, user, UserGroupRole.ADMIN);
@@ -468,20 +445,23 @@ export default class UsersEvartaiService extends moleculer.Service {
     }
   }
 
-  @Action()
+  @Action({
+    params: {
+      personalCode: 'string|convert',
+    },
+  })
   async findOrCreate(ctx: Context<{ personalCode: string }, AppAuthMeta>) {
     const { meta } = ctx;
     const { personalCode } = ctx.params;
 
     const userEvartai: UserEvartai = await ctx.call('usersEvartai.findOne', {
-      query: {
-        personalCode,
-      },
+      query: { personalCode },
     });
     if (userEvartai) return userEvartai;
 
     const user: User = await ctx.call('users.create', {}, { meta });
-    return await ctx.call(
+
+    return ctx.call(
       'usersEvartai.create',
       {
         personalCode,
@@ -650,11 +630,12 @@ export default class UsersEvartaiService extends moleculer.Service {
       lastName: userData.lastName,
       personalCode: userData.personalCode,
       email: userData.email,
-      phone: userData.phoneNumber,
+      phone: userData.phoneNumber || userData.phone,
       companyCode: userData.companyCode,
       companyName: userData.companyName,
       companyEmail: userData.email,
-      companyPhone: userData.phoneNumber,
+      companyPhone: userData.phoneNumber || userData.phone,
+      originalData: userData,
     };
 
     return user;

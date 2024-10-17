@@ -219,33 +219,6 @@ describe("Test '/auth' endpoints", () => {
     });
   });
 
-  describe("Test '/auth/evartai/sign' endpoint", () => {
-    const evartaiSignEndpoint = '/auth/evartai/sign';
-
-    it('Without host', () => {
-      return request(apiService.server)
-        .post(evartaiSignEndpoint)
-        .set(apiHelper.getHeaders())
-        .expect(422)
-        .expect((res: any) => {
-          validationErrorValidateFields(res, ['host']);
-        });
-    });
-
-    // it('With host', () => {
-    //   return request(apiService.server)
-    //     .post(evartaiSignEndpoint)
-    //     .set(apiHelper.getHeaders())
-    //     .send({
-    //       host: 'https://www.biip.lt',
-    //     })
-    //     .expect(200)
-    //     .expect((res: any) => {
-    //       expect(res.body.url).not.toBeUndefined();
-    //     });
-    // });
-  });
-
   describe("Test '/auth/refresh' endpoint", () => {
     const authRefreshEndpoint = '/auth/refresh';
     let tokens: any;

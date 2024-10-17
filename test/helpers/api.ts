@@ -1,4 +1,4 @@
-import faker from '@faker-js/faker';
+import { faker } from '@faker-js/faker';
 import { expect } from '@jest/globals';
 import { BrokerOptions, ServiceBroker } from 'moleculer';
 import config from '../../moleculer.config';
@@ -31,7 +31,7 @@ const servicesWithTables = [
 
 export const serviceBrokerConfig: BrokerOptions = {
   ...config,
-  ...{ logLevel: 'fatal' },
+  ...{ logLevel: 'warn' },
 };
 
 export const errors = {
@@ -75,6 +75,7 @@ export class ApiHelper {
   appHunting: App;
   appUsers: App;
   appSelfUsers: App;
+  appCreateOnLogin: App;
 
   superAdmin: User;
   fisher: User;
@@ -118,6 +119,14 @@ export class ApiHelper {
 
   constructor(broker: any) {
     this.broker = broker;
+  }
+
+  interceptFetch(response: any) {
+    jest
+      .spyOn(global, 'fetch')
+      .mockImplementation(
+        jest.fn(() => Promise.resolve({ json: () => Promise.resolve(response) })) as jest.Mock,
+      );
   }
 
   async setup() {
@@ -169,6 +178,16 @@ export class ApiHelper {
       settings: {
         productNameTo: faker.lorem.word(2),
         canInviteSelf: true,
+      },
+    });
+    this.appCreateOnLogin = await this.broker.call('apps.create', {
+      name: 'Users create on login',
+      type: 'CREATE_LOGIN_USERS',
+      url: faker.internet.url(),
+      settings: {
+        productNameTo: faker.lorem.word(2),
+        createUserOnEvartaiLogin: true,
+        createCompanyOnEvartaiLogin: true,
       },
     });
 

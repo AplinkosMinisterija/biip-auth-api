@@ -341,4 +341,13 @@ export default class ApiService extends moleculer.Service {
 
     return Promise.resolve(ctx);
   }
+
+  @Action({
+    rest: 'POST /cache/clean',
+
+    auth: EndpointType.PUBLIC,
+  })
+  cleanCache() {
+    this.broker.cacher.clean();
+  }
 }

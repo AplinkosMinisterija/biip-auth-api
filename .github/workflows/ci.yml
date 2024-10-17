@@ -87,6 +87,7 @@ jobs:
         run: yarn test
         env:
           DB_CONNECTION: postgresql://postgres:postgres@localhost:5436/auth
+          REDIS_CONNECTION: redis://localhost:6671
 
   validate-docker-build:
     name: Validate if docker image builds
