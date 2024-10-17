@@ -39,17 +39,21 @@ describe('Test assigning groups to user', () => {
   const groupToAssign1 = () => ({ id: apiHelper.groupAdminInner.id, role: UserGroupRole.ADMIN });
   const groupToAssign2 = () => ({ id: apiHelper.groupAdminInner2.id, role: UserGroupRole.USER });
 
-  afterEach(async () => {
-    await broker.call('usersLocal.updateUser', {
-      id: apiHelper.adminInner.id,
-      groups: [groupToAssign1()],
-      apps: [],
-    });
+  afterEach((done) => {
+    new Promise(async (resolve) => {
+      await broker.call('usersLocal.updateUser', {
+        id: apiHelper.adminInner.id,
+        groups: [groupToAssign1()],
+        apps: [],
+      });
 
-    await broker.call('usersLocal.updateUser', {
-      id: apiHelper.hunter.id,
-      groups: [],
-      apps: [apiHelper.appHunting.id],
+      await broker.call('usersLocal.updateUser', {
+        id: apiHelper.hunter.id,
+        groups: [],
+        apps: [apiHelper.appHunting.id],
+      });
+      done();
+      resolve(true);
     });
   });
 
@@ -59,47 +63,41 @@ describe('Test assigning groups to user', () => {
   };
 
   it('Assign groups for inner admin acting as admin (success)', async () => {
-    return request(apiService.server)
+    await request(apiService.server)
       .patch(`${endpoint}/${apiHelper.adminInner.id}`)
       .set(apiHelper.getHeaders(apiHelper.adminToken))
       .send({
         groups: groupsToAssign(),
       })
-      .expect(200)
-      .expect(async (res: any) => {
-        await checkGroups(apiHelper.adminInner.id, groupsToAssign());
-      });
+      .expect(200);
+    await checkGroups(apiHelper.adminInner.id, groupsToAssign());
   });
 
   it('Assign groups (with unassign) for inner admin acting as admin (success)', async () => {
-    return request(apiService.server)
+    await request(apiService.server)
       .patch(`${endpoint}/${apiHelper.adminInner.id}`)
       .set(apiHelper.getHeaders(apiHelper.adminToken))
       .send({
         groups: [groupToAssign2()],
       })
-      .expect(200)
-      .expect(async (res: any) => {
-        await checkGroups(apiHelper.adminInner.id, [groupToAssign2()]);
-      });
+      .expect(200);
+    await checkGroups(apiHelper.adminInner.id, [groupToAssign2()]);
   });
 
   it('Assign groups (without unassign) for inner admin acting as admin (success)', async () => {
-    return request(apiService.server)
+    await request(apiService.server)
       .patch(`${endpoint}/${apiHelper.adminInner.id}`)
       .set(apiHelper.getHeaders(apiHelper.adminToken))
       .send({
         groups: [groupToAssign2()],
         unassignExistingGroups: false,
       })
-      .expect(200)
-      .expect(async (res: any) => {
-        await checkGroups(apiHelper.adminInner.id, [groupToAssign1(), groupToAssign2()]);
-      });
+      .expect(200);
+    await checkGroups(apiHelper.adminInner.id, [groupToAssign1(), groupToAssign2()]);
   });
 
   it('Assign groups for inner admin acting as inner admin (unauthorized)', async () => {
-    return request(apiService.server)
+    await request(apiService.server)
       .patch(`${endpoint}/${apiHelper.adminInner.id}`)
       .set(apiHelper.getHeaders(apiHelper.adminInnerToken))
       .send({
@@ -112,7 +110,7 @@ describe('Test assigning groups to user', () => {
   });
 
   it('Unassign groups for inner admin acting as admin (bad request - no apps & groups)', async () => {
-    return request(apiService.server)
+    await request(apiService.server)
       .patch(`${endpoint}/${apiHelper.adminInner.id}`)
       .set(apiHelper.getHeaders(apiHelper.adminToken))
       .send({
@@ -125,17 +123,15 @@ describe('Test assigning groups to user', () => {
   });
 
   it('Unassign groups for inner admin acting as admin (success)', async () => {
-    return request(apiService.server)
+    await request(apiService.server)
       .patch(`${endpoint}/${apiHelper.adminInner.id}`)
       .set(apiHelper.getHeaders(apiHelper.adminToken))
       .send({
         groups: [],
         apps: [apiHelper.appAdmin.id],
       })
-      .expect(200)
-      .expect(async (res: any) => {
-        await checkGroups(apiHelper.adminInner.id, []);
-      });
+      .expect(200);
+    await checkGroups(apiHelper.adminInner.id, []);
   });
 
   it('Unassign apps for hunter and assigning group acting as admin (success)', async () => {
@@ -143,16 +139,14 @@ describe('Test assigning groups to user', () => {
       id: apiHelper.groupHunters.id,
       role: UserGroupRole.USER,
     };
-    return request(apiService.server)
+    await request(apiService.server)
       .patch(`${endpoint}/${apiHelper.hunter.id}`)
       .set(apiHelper.getHeaders(apiHelper.superAdminToken, apiHelper.appHunting.apiKey))
       .send({
         groups: [groupHunters],
         apps: [],
       })
-      .expect(200)
-      .expect(async (res: any) => {
-        await checkGroups(apiHelper.hunter.id, [groupHunters]);
-      });
+      .expect(200);
+    await checkGroups(apiHelper.hunter.id, [groupHunters]);
   });
 });

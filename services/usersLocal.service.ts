@@ -393,13 +393,9 @@ export default class UsersLocalService extends moleculer.Service {
     >,
   ) {
     const { id, groups, password, oldPassword, email, unassignExistingGroups } = ctx.params;
-    let user: User = await ctx.call('users.resolve', { id });
+    await ctx.call('users.resolve', { id, throwIfNotExist: true });
 
     const { meta } = ctx;
-
-    if (!user) {
-      throwNotFoundError('User not found');
-    }
 
     const userLocal: UserLocal = await ctx.call('usersLocal.findOne', {
       query: { user: id },

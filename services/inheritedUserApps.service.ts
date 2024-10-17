@@ -4,7 +4,7 @@ import moleculer, { Context } from 'moleculer';
 import { Action, Service } from 'moleculer-decorators';
 
 import DbConnection from '../mixins/database.mixin';
-import { BaseModelInterface } from '../types';
+import { BaseModelInterface, FieldHookCallback } from '../types';
 import { App } from './apps.service';
 import { User, UserType } from './users.service';
 export interface InheritedUserApp extends BaseModelInterface {
@@ -41,6 +41,7 @@ export interface InheritedUserApp extends BaseModelInterface {
         columnType: 'integer',
         columnName: 'inheritedAppsIds',
         populate: 'apps.resolve',
+        get: async ({ value }: FieldHookCallback) => value || [],
       },
     },
   },
@@ -58,20 +59,29 @@ export interface InheritedUserApp extends BaseModelInterface {
 export default class InheritedUserAppsService extends moleculer.Service {
   @Action({
     params: {
-      user: {
-        type: 'number',
-        convert: true,
-      },
+      user: [{ type: 'array', items: 'number|convert' }, 'number|convert'],
+      populate: 'string|optional',
     },
   })
-  async getAppsByUser(ctx: Context<{ user: number }>) {
-    const userWithApps: InheritedUserApp = await ctx.call('inheritedUserApps.findOne', {
+  async getAppsByUser(ctx: Context<{ user: number | number[]; populate: 'string' }>) {
+    const ids = ctx.params.user;
+    const multi = Array.isArray(ids);
+
+    const { populate } = ctx.params;
+    const userWithApps: { [key: string]: App['id'][] } = await ctx.call('inheritedUserApps.find', {
       query: {
-        user: ctx.params.user,
+        user: multi ? { $in: ids } : ids,
       },
+      mapping: 'user',
+      mappingField: 'inheritedApps',
+      populate,
     });
 
-    return userWithApps?.inheritedApps || [];
+    if (!multi) {
+      return userWithApps[ids] || [];
+    }
+
+    return userWithApps;
   }
 
   @Action({
