@@ -26,7 +26,7 @@
   "devDependencies": {
     "@aplinkosministerija/biip-prettier-config": "^1.1.0",
     "@aplinkosministerija/eslint-config-biip-api": "^1.0.0",
-    "@faker-js/faker": "^6.0.0-alpha.7",
+    "@faker-js/faker": "^9.0.3",
     "@microsoft/eslint-formatter-sarif": "^3.0.0",
     "@types/bcrypt": "^5.0.0",
     "@types/bcryptjs": "^2.4.2",
