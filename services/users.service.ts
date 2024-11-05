@@ -497,16 +497,28 @@ export default class UsersService extends moleculer.Service {
 
   @Action({
     params: {
-      id: {
-        type: 'number',
-        convert: true,
-      },
+      id: [
+        {
+          type: 'array',
+          items: 'number|convert',
+        },
+        'number|convert',
+      ],
+      mapping: 'boolean|default:false',
     },
   })
   async getVisibleUserGroups(
-    ctx: Context<{ id: number; populate?: string }, AppAuthMeta & UserAuthMeta>,
+    ctx: Context<
+      { id: number | number[]; populate?: string; mapping?: boolean },
+      AppAuthMeta & UserAuthMeta
+    >,
   ) {
-    const { id, populate } = ctx.params;
+    const { id, populate, mapping } = ctx.params;
+
+    if (mapping) {
+      // TODO:
+    }
+
     const query: any = {
       user: id,
     };
