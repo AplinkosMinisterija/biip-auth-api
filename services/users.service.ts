@@ -150,7 +150,7 @@ export interface User extends BaseModelInterface {
         default: [],
         populate: {
           keyField: 'id',
-          async handler(ctx: any, values: any[], items: any[]) {
+          async handler(ctx: any, values: any[], _items: any[]) {
             const userGroups: Record<number, UserGroup[]> = await ctx.call(
               'users.getVisibleUserGroups',
               {
