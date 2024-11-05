@@ -536,7 +536,7 @@ export default class UsersService extends moleculer.Service {
       };
     }
 
-    const response: any = await ctx.call('userGroups.find', {
+    const response: UserGroup[] = await ctx.call('userGroups.find', {
       populate,
       query,
     });
