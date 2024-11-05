@@ -81,7 +81,13 @@ export default class InheritedUserAppsService extends moleculer.Service {
       return userWithApps[ids] || [];
     }
 
-    return userWithApps;
+    return ids.reduce(
+      (acc, item) => ({
+        ...acc,
+        [item]: userWithApps[item] || [],
+      }),
+      {},
+    );
   }
 
   @Action({
