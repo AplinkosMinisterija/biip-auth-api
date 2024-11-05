@@ -148,20 +148,29 @@ export interface User extends BaseModelInterface {
         items: { type: 'object' },
         virtual: true,
         default: [],
-        populate(ctx: any, _values: any, items: any[]) {
-          return Promise.all(
-            items.map(async (item: any) => {
-              const userGroups: Array<UserGroup> = await ctx.call('users.getVisibleUserGroups', {
-                id: item.id,
+        populate: {
+          keyField: 'id',
+          async handler(ctx: any, values: any[], items: any[]) {
+            const userGroups: Record<number, UserGroup[]> = await ctx.call(
+              'users.getVisibleUserGroups',
+              {
+                id: values,
+                mapping: true,
                 populate: 'group',
-              });
-              if (!userGroups || !userGroups.length) return [];
-              return userGroups.map((i) => ({
-                ...(i.group as Group),
-                role: i.role,
-              }));
-            }),
-          );
+              },
+            );
+
+            return values.reduce(
+              (acc: any, item) => ({
+                ...acc,
+                [item]: (userGroups[item] || []).map((i) => ({
+                  ...(i.group as Group),
+                  role: i.role,
+                })),
+              }),
+              {},
+            );
+          },
         },
       },
 
@@ -533,10 +542,13 @@ export default class UsersService extends moleculer.Service {
     });
 
     if (mapping) {
-      return response.reduce((acc: any, item: any) => ({
-        ...acc,
-        [item.user]: item,
-      }));
+      return response.reduce(
+        (acc: any, item: any) => ({
+          ...acc,
+          [item.user]: item,
+        }),
+        {},
+      );
     }
 
     return response;
