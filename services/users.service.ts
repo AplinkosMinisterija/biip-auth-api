@@ -545,7 +545,7 @@ export default class UsersService extends moleculer.Service {
       return response.reduce(
         (acc: any, item: any) => ({
           ...acc,
-          [item.user]: item,
+          [item.user]: [...(acc[item.user] || []), item],
         }),
         {},
       );
