@@ -148,20 +148,29 @@ export interface User extends BaseModelInterface {
         items: { type: 'object' },
         virtual: true,
         default: [],
-        populate(ctx: any, _values: any, items: any[]) {
-          return Promise.all(
-            items.map(async (item: any) => {
-              const userGroups: Array<UserGroup> = await ctx.call('users.getVisibleUserGroups', {
-                id: item.id,
+        populate: {
+          keyField: 'id',
+          async handler(ctx: any, values: any[], _items: any[]) {
+            const userGroups: Record<number, UserGroup[]> = await ctx.call(
+              'users.getVisibleUserGroups',
+              {
+                id: values,
+                mapping: true,
                 populate: 'group',
-              });
-              if (!userGroups || !userGroups.length) return [];
-              return userGroups.map((i) => ({
-                ...(i.group as Group),
-                role: i.role,
-              }));
-            }),
-          );
+              },
+            );
+
+            return values.reduce(
+              (acc: any, item) => ({
+                ...acc,
+                [item]: (userGroups[item] || []).map((i) => ({
+                  ...(i.group as Group),
+                  role: i.role,
+                })),
+              }),
+              {},
+            );
+          },
         },
       },
 
@@ -497,18 +506,26 @@ export default class UsersService extends moleculer.Service {
 
   @Action({
     params: {
-      id: {
-        type: 'number',
-        convert: true,
-      },
+      id: [
+        {
+          type: 'array',
+          items: 'number|convert',
+        },
+        'number|convert',
+      ],
+      mapping: 'boolean|default:false',
     },
   })
   async getVisibleUserGroups(
-    ctx: Context<{ id: number; populate?: string }, AppAuthMeta & UserAuthMeta>,
+    ctx: Context<
+      { id: number | number[]; populate?: string; mapping?: boolean },
+      AppAuthMeta & UserAuthMeta
+    >,
   ) {
-    const { id, populate } = ctx.params;
+    const { id, populate, mapping } = ctx.params;
+
     const query: any = {
-      user: id,
+      user: { $in: Array.isArray(id) ? id : [id] },
     };
     if (ctx.meta?.app?.id) {
       const groupsIds = await ctx.call('permissions.getVisibleGroupsIds', {
@@ -519,10 +536,22 @@ export default class UsersService extends moleculer.Service {
       };
     }
 
-    return ctx.call('userGroups.find', {
+    const response: UserGroup[] = await ctx.call('userGroups.find', {
       populate,
       query,
     });
+
+    if (mapping) {
+      return response.reduce<Record<number, UserGroup[]>>(
+        (acc, item) => ({
+          ...acc,
+          [item.user as number]: [...(acc[item.user as number] || []), item],
+        }),
+        {},
+      );
+    }
+
+    return response;
   }
 
   @Method
