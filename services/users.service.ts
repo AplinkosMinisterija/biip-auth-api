@@ -515,12 +515,8 @@ export default class UsersService extends moleculer.Service {
   ) {
     const { id, populate, mapping } = ctx.params;
 
-    if (mapping) {
-      // TODO:
-    }
-
     const query: any = {
-      user: id,
+      user: { $in: Array.isArray(id) ? id : [id] },
     };
     if (ctx.meta?.app?.id) {
       const groupsIds = await ctx.call('permissions.getVisibleGroupsIds', {
@@ -531,10 +527,19 @@ export default class UsersService extends moleculer.Service {
       };
     }
 
-    return ctx.call('userGroups.find', {
+    const response: any = await ctx.call('userGroups.find', {
       populate,
       query,
     });
+
+    if (mapping) {
+      return response.reduce((acc: any, item: any) => ({
+        ...acc,
+        [item.user]: item,
+      }));
+    }
+
+    return response;
   }
 
   @Method
