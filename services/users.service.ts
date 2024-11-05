@@ -542,10 +542,10 @@ export default class UsersService extends moleculer.Service {
     });
 
     if (mapping) {
-      return response.reduce(
-        (acc: any, item: any) => ({
+      return response.reduce<Record<number, UserGroup[]>>(
+        (acc, item) => ({
           ...acc,
-          [item.user]: [...(acc[item.user] || []), item],
+          [item.user as number]: [...(acc[item.user as number] || []), item],
         }),
         {},
       );
