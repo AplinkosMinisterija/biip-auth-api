@@ -449,14 +449,35 @@ export default class UsersLocalService extends moleculer.Service {
 
   @Action({
     params: {
-      id: {
-        type: 'number',
-        convert: true,
-      },
+      id: [
+        {
+          type: 'array',
+          items: 'number|convert',
+        },
+        'number|convert',
+      ],
+      mapping: 'boolean|default:false',
     },
   })
-  async isUserInvited(ctx: Context<{ id: number }>) {
-    const { id } = ctx.params;
+  async isUserInvited(ctx: Context<{ id: number | number[]; mapping: boolean }>) {
+    const { id, mapping } = ctx.params;
+
+    if (mapping) {
+      const users: UserLocal[] = await ctx.call('usersLocal.find', {
+        query: {
+          id: { $in: Array.isArray(id) ? id : [id] },
+        },
+        fields: ['id', 'password'],
+      });
+
+      return users.reduce(
+        (acc: any, item) => ({
+          ...acc,
+          [item.id]: !item.password,
+        }),
+        {},
+      );
+    }
 
     const adapter = await this.getAdapter(ctx);
 

@@ -88,14 +88,32 @@ export interface User extends BaseModelInterface {
       invited: {
         virtual: true,
         type: 'boolean',
-        get: async ({ ctx, entity }: FieldHookCallback) => {
-          const isUserEvartaiInvited: Boolean = await ctx.call('usersEvartai.isUserInvited', {
-            id: entity.id,
-          });
-          const isUserLocalInvited: Boolean = await ctx.call('usersLocal.isUserInvited', {
-            id: entity.id,
-          });
-          return isUserEvartaiInvited || isUserLocalInvited;
+        populate: {
+          keyField: 'id',
+          async handler(ctx: any, values: any[], items: any[]) {
+            const invitedEvartaiUsersById: { [key: string]: Boolean } = await ctx.call(
+              'usersEvartai.isUserInvited',
+              {
+                id: values,
+                mapping: true,
+              },
+            );
+            const invitedLocalUsersById: { [key: string]: Boolean } = await ctx.call(
+              'usersLocal.isUserInvited',
+              {
+                id: values,
+                mapping: true,
+              },
+            );
+
+            return values.reduce(
+              (acc: any, item) => ({
+                ...acc,
+                [item]: !!invitedEvartaiUsersById[item] || !!invitedLocalUsersById[item],
+              }),
+              {},
+            );
+          },
         },
       },
 
@@ -187,6 +205,8 @@ export interface User extends BaseModelInterface {
 
       ...COMMON_FIELDS,
     },
+
+    defaultPopulates: ['invited'],
 
     scopes: {
       ...COMMON_SCOPES,

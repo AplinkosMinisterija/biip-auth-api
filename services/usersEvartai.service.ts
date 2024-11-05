@@ -509,14 +509,36 @@ export default class UsersEvartaiService extends moleculer.Service {
 
   @Action({
     params: {
-      id: {
-        type: 'number',
-        convert: true,
-      },
+      id: [
+        {
+          type: 'array',
+          items: 'number|convert',
+        },
+        'number|convert',
+      ],
+      mapping: 'boolean|default:false',
     },
   })
-  async isUserInvited(ctx: Context<{ id: number }>) {
-    const { id } = ctx.params;
+  async isUserInvited(ctx: Context<{ id: number | number[]; mapping: boolean }>) {
+    const { id, mapping } = ctx.params;
+
+    if (mapping) {
+      const users: User[] = await ctx.call('users.find', {
+        query: {
+          id: { $in: Array.isArray(id) ? id : [id] },
+        },
+        fields: ['id', 'firstName', 'lastName'],
+      });
+
+      return users.reduce(
+        (acc: any, item) => ({
+          ...acc,
+          [item.id]: !item.firstName && !item.lastName,
+        }),
+        {},
+      );
+    }
+
     const user: User = await ctx.call('users.resolve', {
       id,
       fields: ['firstName', 'lastName'],
