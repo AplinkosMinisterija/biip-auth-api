@@ -572,7 +572,7 @@ export default class UsersService extends moleculer.Service {
       const groupRemoved = newGroups.every((ng) => ng.group !== eg.group);
 
       if (groupRemoved) {
-        this.broker.call('userGroups.remove', { id: eg.id }, { meta });
+        await this.broker.call('userGroups.remove', { id: eg.id }, { meta });
       }
     }
   }
