@@ -390,7 +390,7 @@ export default class UsersService extends moleculer.Service {
     },
   })
   async assignGroups(
-    ctx: Context<{ id: number; groups: Array<string>; unassign: boolean }, AppAuthMeta>,
+    ctx: Context<{ id: number; groups: Array<any>; unassign: boolean }, AppAuthMeta>,
   ) {
     const userId = ctx.params.id;
     if (!userId) return;
@@ -408,7 +408,11 @@ export default class UsersService extends moleculer.Service {
 
     if (everyGroupAssigned) return false;
 
-    this.assignNewGroupsToUser(newGroups, ctx.params.unassign ? assignedGroups : [], ctx.meta);
+    await this.assignNewGroupsToUser(
+      newGroups,
+      ctx.params.unassign ? assignedGroups : [],
+      ctx.meta,
+    );
     return true;
   }
 
@@ -555,17 +559,22 @@ export default class UsersService extends moleculer.Service {
   }
 
   @Method
-  assignNewGroupsToUser(newGroups: Array<UserGroup>, existingGroups: Array<UserGroup>, meta: any) {
-    newGroups.forEach((ng) => {
-      this.broker.call('userGroups.assign', ng, { meta });
-    });
+  async assignNewGroupsToUser(
+    newGroups: Array<UserGroup>,
+    existingGroups: Array<UserGroup>,
+    meta: any,
+  ) {
+    for (const ng of newGroups) {
+      await this.broker.call('userGroups.assign', ng, { meta });
+    }
 
-    existingGroups.forEach((eg) => {
+    for (const eg of existingGroups) {
       const groupRemoved = newGroups.every((ng) => ng.group !== eg.group);
+
       if (groupRemoved) {
-        this.broker.call('userGroups.remove', { id: eg.id }, { meta });
+        await this.broker.call('userGroups.remove', { id: eg.id }, { meta });
       }
-    });
+    }
   }
 
   @Method
