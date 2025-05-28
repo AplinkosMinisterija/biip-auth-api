@@ -309,7 +309,7 @@ export default class UsersService extends moleculer.Service {
     if (ctx.params.id) {
       const user: User = await this.resolveEntities(ctx, {
         id,
-        populate: ['permissions', 'municipalities', 'inheritedApps'],
+        populate: ['permissions', 'municipalities'],
       });
       const userInner: any = await getInnerUser(typeId, type);
       return { ...userInner, ...user };
