@@ -70,28 +70,28 @@
       }
 
       .card {
-        height:120px;
-        min-width:240px;
-        padding: 16px 16px 12px 16px;
+        height: 120px;
+        min-width: 240px;
+        padding: 16px;
         border-radius: 4px;
         border: 1px solid #CDD5DF;
         background-color: #FFFFFF;
         cursor: pointer;
-        transition: 0.2s;
+        transition: background-color 0.2s;
         display: flex;
         flex-direction: column;
         gap: 16px;
       }
 
+      .card:hover {
+        background-color: #e0e0e0;
+      }
+
       .card-description {
         font-weight: 400;
         font-size: 14px;
-        line-height: 100%;
+        line-height: 1;
         color: #4B5565;
-      }
-
-      .card:hover {
-        background-color: #e0e0e0;
       }
 
       @media (max-width: 768px) {
@@ -99,22 +99,21 @@
           flex-direction: column;
         }
 
-        .card {
-        min-width:140px;
-      }
-
         .left {
           display: none;
         }
 
         .right {
-          flex: none;
           width: 100%;
           padding: 20px;
         }
 
         .grid {
           grid-template-columns: 1fr;
+        }
+
+        .card {
+          min-width: 140px;
         }
       }
     </style>
@@ -125,56 +124,47 @@
     <script type="text/babel">
       const App = () => {
         const [apps, setApps] = React.useState([]);
-        const [loading , setLoading] = React.useState(true);
-        const loadApps = async () => {
-          try {
-            const response = await fetch('/api/apps/all?sort=id', {
-              method: 'GET',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-            });
-
-            if (!response.ok) {
-              alert('Įvyko klaida, pabandykite vėliau.');
-              return;
-            }
-
-            const data = await response.json();
-            setApps(data);
-            setLoading(false)
-          } catch (error) {
-            alert('Klaida jungiantis prie serverio.');
-          }
-        };
+        const [loading, setLoading] = React.useState(true);
 
         React.useEffect(() => {
+          const loadApps = async () => {
+            try {
+              const response = await fetch('/api/apps/all?sort=id', {
+                method: 'GET',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+              });
+
+              if (!response.ok) {
+                alert('Įvyko klaida, pabandykite vėliau.');
+                return;
+              }
+
+              const data = await response.json();
+              setApps(data);
+            } catch (error) {
+              alert('Klaida jungiantis prie serverio.');
+            } finally {
+              setLoading(false);
+            }
+          };
+
           loadApps();
         }, []);
 
-
-        const handleClick=(url)=>{
-
-          var params = new URLSearchParams(window.location.search);
-
-          if(params.has('ticket')){
-
-            window.location =`${url}?ticket=${params.get('ticket')}`
-
-          }else{
-            window.location = url
-          }
-
-
-        }
-
+        const handleAppClick = (url) => {
+          const params = new URLSearchParams(window.location.search);
+          const ticket = params.get('ticket');
+          window.location.href = ticket ? `${url}?ticket=${ticket}` : url;
+        };
 
         return (
           <div className="container">
             <div className="left" />
             <div className="right">
               <div className="content">
-                <a href={'https://biip.lt'} id="logobtn">
+                <a href="https://biip.lt" id="logobtn">
                   <img
                     src="https://s3.biip.lt/biip-wp/app/uploads/2021/09/logo.svg"
                     width="81"
@@ -185,48 +175,54 @@
                 <div className="subtitle">
                   Biologinės įvairovės informacinė sistema
                 </div>
-                {loading? 
-              <svg
-                version="1.1"
-                xmlns="http://www.w3.org/2000/svg"
-                x="0px"
-                y="0px"
-                width={`40px`}
-                height={`40px`}
-                viewBox="0 0 50 50"
-              >
-                <path
-                  fill={'#000'}
-                  d="M43.935,25.145c0-10.318-8.364-18.683-18.683-18.683c-10.318,0-18.683,8.365-18.683,18.683h4.068c0-8.071,6.543-14.615,14.615-14.615c8.072,0,14.615,6.543,14.615,14.615H43.935z"
-                >
-                  <animateTransform
-                    attributeType="xml"
-                    attributeName="transform"
-                    type="rotate"
-                    from="0 25 25"
-                    to="360 25 25"
-                    dur="0.6s"
-                    repeatCount="indefinite"
-                  />
-                </path>
-              </svg>
-            :    <div className="grid">
-                  {apps
-                    .filter((app) => !!app.settings?.isBiipLoginApp)
-                    .map((app, index) => (
-                      <div onClick={()=>   handleClick(app.url)} className="card" key={index}>
+
+                {loading ? (
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="40px"
+                    height="40px"
+                    viewBox="0 0 50 50"
+                  >
+                    <path
+                      fill="#000"
+                      d="M43.935,25.145c0-10.318-8.364-18.683-18.683-18.683
+                        c-10.318,0-18.683,8.365-18.683,18.683h4.068
+                        c0-8.071,6.543-14.615,14.615-14.615
+                        c8.072,0,14.615,6.543,14.615,14.615H43.935z"
+                    >
+                      <animateTransform
+                        attributeType="xml"
+                        attributeName="transform"
+                        type="rotate"
+                        from="0 25 25"
+                        to="360 25 25"
+                        dur="0.6s"
+                        repeatCount="indefinite"
+                      />
+                    </path>
+                  </svg>
+                ) : (
+                  <div className="grid">
+                    {apps
+                      .filter((app) => app.settings?.isBiipLoginApp)
+                      .map((app, index) => (
                         <div
-                          dangerouslySetInnerHTML={{
-                            __html: app.settings.svgIcon,
-                          }}
-                        />
-                        <div className="card-description">
-                          {app.settings.description}
+                          className="card"
+                          key={index}
+                          onClick={() => handleAppClick(app.url)}
+                        >
+                          <div
+                            dangerouslySetInnerHTML={{
+                              __html: app.settings.svgIcon,
+                            }}
+                          />
+                          <div className="card-description">
+                            {app.settings.description}
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                </div>}
-            
+                      ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
