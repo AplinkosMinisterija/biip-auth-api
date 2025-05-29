@@ -3,16 +3,17 @@
 import moleculer, { Context } from 'moleculer';
 import { Action, Method, Service } from 'moleculer-decorators';
 
-import { generateToken, verifyToken } from '../utils';
 import DbConnection from '../mixins/database.mixin';
 import {
-  COMMON_FIELDS,
-  COMMON_DEFAULT_SCOPES,
-  COMMON_SCOPES,
-  FieldHookCallback,
   BaseModelInterface,
+  COMMON_DEFAULT_SCOPES,
+  COMMON_FIELDS,
+  COMMON_SCOPES,
   DISABLE_REST_ACTIONS,
+  EndpointType,
+  FieldHookCallback,
 } from '../types';
+import { generateToken, verifyToken } from '../utils';
 import { AppAuthMeta } from './api.service';
 
 // default app types
@@ -37,6 +38,8 @@ export interface App extends BaseModelInterface {
     createUserOnEvartaiLogin: boolean;
     createCompanyOnEvartaiLogin: boolean;
     canInviteSelf: boolean;
+    svgIcon?:string
+    isBiipLoginApp?:string;
   };
 }
 
@@ -78,6 +81,13 @@ export interface App extends BaseModelInterface {
         type: 'object',
         required: true,
         properties: {
+          isBiipLoginApp: {
+            type: 'boolean',
+            default: false,
+          },
+          svgIcon: {
+            type: 'string',
+          },
           createUserOnEvartaiLogin: {
             type: 'boolean',
             default: false,
@@ -113,6 +123,9 @@ export interface App extends BaseModelInterface {
 
   actions: {
     ...DISABLE_REST_ACTIONS,
+    find: {
+      auth: EndpointType.PUBLIC,
+    },
     update: {
       rest: null,
     },
