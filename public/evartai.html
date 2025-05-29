@@ -213,11 +213,11 @@
                         >
                           <div
                             dangerouslySetInnerHTML={{
-                              __html: app.settings.svgIcon,
+                              __html: app.settings?.svgIcon,
                             }}
                           />
                           <div className="card-description">
-                            {app.settings.description}
+                            {app.settings?.description}
                           </div>
                         </div>
                       ))}
