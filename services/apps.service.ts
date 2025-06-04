@@ -123,9 +123,6 @@ export interface App extends BaseModelInterface {
 
   actions: {
     ...DISABLE_REST_ACTIONS,
-    find: {
-      auth: EndpointType.PUBLIC,
-    },
     update: {
       rest: null,
     },
