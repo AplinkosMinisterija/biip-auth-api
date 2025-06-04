@@ -38,8 +38,8 @@ export interface App extends BaseModelInterface {
     createUserOnEvartaiLogin: boolean;
     createCompanyOnEvartaiLogin: boolean;
     canInviteSelf: boolean;
-    svgIcon?:string
-    isBiipLoginApp?:string;
+    svgIcon?: string;
+    isLoginApp?: string;
   };
 }
 
@@ -81,7 +81,7 @@ export interface App extends BaseModelInterface {
         type: 'object',
         required: true,
         properties: {
-          isBiipLoginApp: {
+          isLoginApp: {
             type: 'boolean',
             default: false,
           },
@@ -222,6 +222,21 @@ export default class AppsService extends moleculer.Service {
   })
   async me(ctx: Context<{}, AppAuthMeta>) {
     return ctx.meta.app;
+  }
+
+  @Action({
+    rest: {
+      method: 'GET',
+      path: '/login',
+    },
+    auth: EndpointType.PUBLIC,
+  })
+  async getLoginApps(ctx: Context) {
+    const apps: App[] = await ctx.call('apps.find', {
+      sort: 'name',
+    });
+
+    return apps.filter((app) => !!app?.settings?.isLoginApp);
   }
 
   @Method

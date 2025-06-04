@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="lt">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>BIIP Login</title>
+    <title>Login</title>
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -125,15 +125,31 @@
       const App = () => {
         const [apps, setApps] = React.useState([]);
         const [loading, setLoading] = React.useState(true);
+        const [env, setEnv] = React.useState({});
+        const [envLoading, setEnvLoading] = React.useState(true);
 
         React.useEffect(() => {
+          const fetchEnv = async () => {
+            try {
+              const response = await fetch('/api/public/htmlEnv');
+              if (!response.ok) {
+                alert('Įvyko klaida, pabandykite vėliau.');
+                return;
+              }
+              const data = await response.json();
+              setEnv(data);
+            } catch (error) {
+              alert('Klaida jungiantis prie serverio.');
+            } finally {
+              setEnvLoading(false);
+            }
+          };
+
           const loadApps = async () => {
             try {
-              const response = await fetch('/api/apps/all?sort=id', {
+              const response = await fetch('/api/apps/login', {
                 method: 'GET',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
               });
 
               if (!response.ok) {
@@ -150,6 +166,7 @@
             }
           };
 
+          fetchEnv();
           loadApps();
         }, []);
 
@@ -159,52 +176,56 @@
           window.location.href = ticket ? `${url}?ticket=${ticket}` : url;
         };
 
+        const Loader = () => (
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="40px"
+            height="40px"
+            viewBox="0 0 50 50"
+          >
+            <path
+              fill="#000"
+              d="M43.935,25.145c0-10.318-8.364-18.683-18.683-18.683
+                c-10.318,0-18.683,8.365-18.683,18.683h4.068
+                c0-8.071,6.543-14.615,14.615-14.615
+                c8.072,0,14.615,6.543,14.615,14.615H43.935z"
+            >
+              <animateTransform
+                attributeType="xml"
+                attributeName="transform"
+                type="rotate"
+                from="0 25 25"
+                to="360 25 25"
+                dur="0.6s"
+                repeatCount="indefinite"
+              />
+            </path>
+          </svg>
+        );
+
+        if (envLoading) return <Loader />;
+
         return (
           <div className="container">
             <div className="left" />
             <div className="right">
               <div className="content">
-                <a href="https://biip.lt" id="logobtn">
+                <a href={env?.HTML_LOGO_URL || '#'} id="logobtn">
                   <img
-                    src="https://s3.biip.lt/biip-wp/app/uploads/2021/09/logo.svg"
+                    src={env?.HTML_LOGO_ICON_URL}
                     width="81"
                     height="49"
                     alt="Biip Logo"
                   />
                 </a>
-                <div className="subtitle">
-                  Biologinės įvairovės informacinė sistema
-                </div>
+
+                <div className="subtitle">{env?.HTML_SUBTITLE}</div>
 
                 {loading ? (
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="40px"
-                    height="40px"
-                    viewBox="0 0 50 50"
-                  >
-                    <path
-                      fill="#000"
-                      d="M43.935,25.145c0-10.318-8.364-18.683-18.683-18.683
-                        c-10.318,0-18.683,8.365-18.683,18.683h4.068
-                        c0-8.071,6.543-14.615,14.615-14.615
-                        c8.072,0,14.615,6.543,14.615,14.615H43.935z"
-                    >
-                      <animateTransform
-                        attributeType="xml"
-                        attributeName="transform"
-                        type="rotate"
-                        from="0 25 25"
-                        to="360 25 25"
-                        dur="0.6s"
-                        repeatCount="indefinite"
-                      />
-                    </path>
-                  </svg>
+                  <Loader />
                 ) : (
                   <div className="grid">
                     {apps
-                      .filter((app) => app.settings?.isBiipLoginApp)
                       .map((app, index) => (
                         <div
                           className="card"
