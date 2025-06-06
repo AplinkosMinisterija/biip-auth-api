@@ -234,7 +234,7 @@ export default class ApiService extends moleculer.Service {
     const endpointType = (ctx?.params?.req as any)?.$action?.auth;
 
     if (endpointType === EndpointType.PUBLIC) {
-      return Promise.resolve(null);
+      return Promise.resolve(ctx);
     }
 
     const apiKey = headers['x-api-key'];
