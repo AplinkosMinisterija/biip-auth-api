@@ -233,10 +233,6 @@ export default class ApiService extends moleculer.Service {
   ): Promise<unknown> {
     const endpointType = (ctx?.params?.req as any)?.$action?.auth;
 
-    if (endpointType === EndpointType.PUBLIC) {
-      return Promise.resolve(ctx);
-    }
-
     const apiKey = headers['x-api-key'];
 
     if (apiKey) {
@@ -252,6 +248,10 @@ export default class ApiService extends moleculer.Service {
           new ApiGateway.Errors.UnAuthorizedError(ApiGateway.Errors.ERR_INVALID_TOKEN, null),
         );
       }
+    }
+
+    if (endpointType === EndpointType.PUBLIC) {
+      return Promise.resolve(ctx);
     }
 
     return this.rejectAuth(
