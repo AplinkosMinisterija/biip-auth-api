@@ -50,6 +50,8 @@ function verifyApiKey(
         aliases: {
           'GET /ping': 'api.ping',
           'POST /login': 'auth.redirectEvartai',
+          'GET /api/public/htmlEnv': 'public.getHtmlEnv',
+          'GET /api/apps/login': 'apps.getLoginApps',
           '* /login/evartai': 'public.evartaiHtml',
         },
 
@@ -231,8 +233,6 @@ export default class ApiService extends moleculer.Service {
       'x-api-key': string;
     },
   ): Promise<unknown> {
-    const endpointType = (ctx?.params?.req as any)?.$action?.auth;
-
     const apiKey = headers['x-api-key'];
 
     if (apiKey) {
@@ -248,10 +248,6 @@ export default class ApiService extends moleculer.Service {
           new ApiGateway.Errors.UnAuthorizedError(ApiGateway.Errors.ERR_INVALID_TOKEN, null),
         );
       }
-    }
-
-    if (endpointType === EndpointType.PUBLIC) {
-      return Promise.resolve(ctx);
     }
 
     return this.rejectAuth(
