@@ -33,6 +33,7 @@ export interface App extends BaseModelInterface {
   url: string;
   settings?: {
     productNameTo?: string;
+    productName?: string;
     isApp?: boolean;
     createUserOnEvartaiLogin: boolean;
     createCompanyOnEvartaiLogin: boolean;
