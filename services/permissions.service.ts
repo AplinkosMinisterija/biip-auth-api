@@ -961,6 +961,7 @@ export default class PermissionsService extends moleculer.Service {
           group: { $in: groupIds },
         },
         fields: 'user',
+        scope: false,
       });
 
       return [...usersIds.map((i) => i.user)];
@@ -979,6 +980,7 @@ export default class PermissionsService extends moleculer.Service {
         group: { $in: visibleGroupIds },
       },
       fields: 'user',
+      scope: false,
     });
 
     const usersSet = new Set([...usersIds.map((i) => i.user)]);
@@ -1001,6 +1003,7 @@ export default class PermissionsService extends moleculer.Service {
     const userGroups: Array<UserGroup> = await this.broker.call('userGroups.find', {
       query,
       fields: 'group',
+      scope: false,
     });
 
     const mapOfGroups = await Promise.all(
