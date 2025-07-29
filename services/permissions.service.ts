@@ -229,6 +229,7 @@ export default class PermissionsService extends moleculer.Service {
           },
         },
         populate: 'municipalities',
+        scope: false,
       },
       { parentCtx },
     );
