@@ -88,9 +88,9 @@ export const COMMON_FIELDS = {
 };
 
 export const COMMON_SCOPES = {
-  notDeleted: {
-    deletedAt: { $exists: false },
-  },
+  // notDeleted: {
+  //   deletedAt: { $exists: false },
+  // },
 };
 
 export interface BaseModelInterface {
