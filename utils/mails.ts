@@ -16,71 +16,82 @@ export function emailCanBeSent() {
   return ['production', 'staging'].includes(process.env.NODE_ENV);
 }
 
+function getSender(name?: string) {
+  if (!name) return sender;
+  return `${name} <${sender}>`;
+}
+
 export function sendUserInvitationEmail(
   email: string,
-  invitationUrl: string,
-  inviter?: User,
-  productName?: string,
+  data: { invitationUrl: string; inviter?: User; productName?: string; senderName?: string },
 ) {
   if (!userInviteTemplateId) return;
 
   const inviterName =
-    inviter?.firstName || inviter?.lastName ? `${inviter.firstName} ${inviter.lastName}` : '';
+    data.inviter?.firstName || data.inviter?.lastName
+      ? `${data.inviter.firstName} ${data.inviter.lastName}`
+      : '';
 
   return client?.sendEmailWithTemplate({
-    From: sender,
+    From: getSender(data.senderName),
     To: email.toLowerCase(),
     TemplateId: userInviteTemplateId,
     TemplateModel: {
       invite_sender_name: inviterName,
-      invite_sender_email: inviter?.email || '',
-      action_url: invitationUrl,
-      product_name: productName,
+      invite_sender_email: data.inviter?.email || '',
+      action_url: data.invitationUrl,
+      product_name: data.productName,
     },
   });
 }
 
 export function sendEvartaiInvitationEmail(
   email: string,
-  appUrl: string,
-  appName: string,
-  inviterName: string,
-  inviterEmail: string,
-  inviteType: string,
-  isApp: boolean = false,
+  data: {
+    appUrl: string;
+    appName: string;
+    inviterName: string;
+    inviterEmail: string;
+    inviteType: string;
+    isApp: boolean;
+    senderName?: string;
+  },
 ) {
   let templateId = evartaiInviteTemplateId;
-  if (isApp && evartaiInviteTemplateIdApp) {
+  if (data.isApp && evartaiInviteTemplateIdApp) {
     templateId = evartaiInviteTemplateIdApp;
   }
 
   if (!templateId) return;
 
   return client?.sendEmailWithTemplate({
-    From: sender,
+    From: getSender(data.senderName),
     To: email.toLowerCase(),
     TemplateId: templateId,
     TemplateModel: {
-      invite_sender_name: inviterName,
-      invite_sender_email: inviterEmail,
-      invite_type: inviteType,
-      action_url: appUrl,
-      product_name: appName,
+      invite_sender_name: data.inviterName,
+      invite_sender_email: data.inviterEmail,
+      invite_type: data.inviteType,
+      action_url: data.appUrl,
+      product_name: data.appName,
     },
   });
 }
 
-export function sendResetPasswordEmail(email: string, user: User, resetUrl: string) {
+export function sendResetPasswordEmail(
+  email: string,
+  data: { user: User; resetUrl: string; senderName?: string },
+) {
   if (!passwordResetTemplateId) return;
 
   return client?.sendEmailWithTemplate({
-    From: sender,
+    From: getSender(data.senderName),
     To: email.toLowerCase(),
     TemplateId: passwordResetTemplateId,
     TemplateModel: {
-      name: user.firstName,
-      user_email: user.email,
-      action_url: resetUrl,
+      name: data.user.firstName,
+      user_email: data.user.email,
+      action_url: data.resetUrl,
     },
   });
 }

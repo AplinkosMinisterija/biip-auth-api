@@ -402,7 +402,11 @@ export default class AuthService extends moleculer.Service {
       return { success: true, url };
     }
 
-    await sendResetPasswordEmail(email, user, url);
+    await sendResetPasswordEmail(email, {
+      user,
+      resetUrl: url,
+      senderName: app.settings?.productName,
+    });
 
     return { success: true };
   }
