@@ -1053,7 +1053,7 @@ export default class PermissionsService extends moleculer.Service {
   }
 
   @Method
-  assignPermissionsFilters(ctx: any) {
+  async assignPermissionsFilters(ctx: any) {
     if (!ctx.meta.user) return ctx;
 
     if (typeof ctx.params.query === 'string') {
@@ -1065,6 +1065,12 @@ export default class PermissionsService extends moleculer.Service {
     if (!ctx.params.query.municipalities || !ctx.params.query.app) {
       ctx.params.query.app = { $exists: true };
     }
+
+    const superAdmins: User[] = await this.broker.call('userGroups.find', {
+      query: { type: UserType.SUPER_ADMIN },
+    });
+
+    ctx.params.query.createdBy = { $in: superAdmins.map((superAdmin) => superAdmin.id) };
 
     return ctx;
   }

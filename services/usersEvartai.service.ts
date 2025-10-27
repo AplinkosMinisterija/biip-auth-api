@@ -242,6 +242,11 @@ export default class UsersEvartaiService extends moleculer.Service {
         convert: true,
         optional: true,
       },
+      accesses: {
+        type: 'array',
+        items: 'string',
+        optional: true,
+      },
       role: {
         type: 'string',
         optional: true,
@@ -267,12 +272,14 @@ export default class UsersEvartaiService extends moleculer.Service {
         companyId: number;
         role: UserGroupRole;
         notify: Array<string>;
+        accesses: Array<string>;
         throwErrors: boolean;
       },
       AppAuthMeta & UserAuthMeta
     >,
   ) {
-    const { personalCode, companyCode, companyId, role, notify, throwErrors } = ctx.params;
+    const { personalCode, companyCode, companyId, role, notify, accesses, throwErrors } =
+      ctx.params;
 
     const { meta } = ctx;
 
@@ -439,6 +446,10 @@ export default class UsersEvartaiService extends moleculer.Service {
         },
         { meta },
       );
+
+      if (accesses?.length) {
+        await ctx.call('permissions.create', { group: group.id, app: app.id, accesses });
+      }
 
       await sendInvitations();
       return group;
