@@ -1066,7 +1066,9 @@ export default class PermissionsService extends moleculer.Service {
       ctx.params.query.app = { $exists: true };
     }
 
-    const superAdmins: User[] = await this.broker.call('userGroups.find', {
+    // TODO: Fix filtering by flag or find another solution
+
+    const superAdmins: User[] = await this.broker.call('users.find', {
       query: { type: UserType.SUPER_ADMIN },
     });
 
