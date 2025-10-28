@@ -1068,12 +1068,6 @@ export default class PermissionsService extends moleculer.Service {
 
     // TODO: Fix filtering by flag or find another solution
 
-    const superAdmins: User[] = await this.broker.call('users.find', {
-      query: { type: UserType.SUPER_ADMIN },
-    });
-
-    ctx.params.query.createdBy = { $in: superAdmins.map((superAdmin) => superAdmin.id) };
-
     return ctx;
   }
 
