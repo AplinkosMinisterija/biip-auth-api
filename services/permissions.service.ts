@@ -1053,7 +1053,7 @@ export default class PermissionsService extends moleculer.Service {
   }
 
   @Method
-  async assignPermissionsFilters(ctx: any) {
+  assignPermissionsFilters(ctx: any) {
     if (!ctx.meta.user) return ctx;
 
     if (typeof ctx.params.query === 'string') {
