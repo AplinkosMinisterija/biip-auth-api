@@ -383,6 +383,85 @@ export default class PermissionsService extends moleculer.Service {
   }
 
   @Action({
+    rest: 'POST /assignAccess/:group',
+    params: {
+      group: { type: 'number' },
+      access: { type: 'string' },
+    },
+  })
+  async assignAccess(
+    ctx: Context<{
+      group: number;
+      access: string;
+    }>,
+  ) {
+    const { group, access } = ctx.params;
+
+    if (!group) {
+      throwBadRequestError('Group should be passed.');
+    }
+
+    const permission: Permission = await ctx.call('permissions.findOne', {
+      query: { group },
+    });
+
+    if (permission && permission.id) {
+      const existingAccesses = permission.accesses;
+
+      const updatedAccesses = existingAccesses.includes(access)
+        ? existingAccesses
+        : [...existingAccesses, access];
+
+      return ctx.call('permissions.update', {
+        id: permission.id,
+        accesses: updatedAccesses,
+      });
+    }
+
+    return ctx.call('permissions.create', {
+      group,
+      accesses: [access],
+    });
+  }
+
+  @Action({
+    rest: 'POST /unassignAccess/:group',
+    params: {
+      group: { type: 'number' },
+      access: { type: 'string' },
+    },
+  })
+  async unassignAccess(
+    ctx: Context<{
+      group: number;
+      access: string;
+    }>,
+  ) {
+    const { group, access } = ctx.params;
+
+    if (!group) {
+      throwBadRequestError('Group should be passed.');
+    }
+
+    const permission: Permission = await ctx.call('permissions.findOne', {
+      query: { group },
+    });
+
+    if (!permission || !permission.id) {
+      throwBadRequestError('Permission not found for this group.');
+    }
+
+    const existingAccesses = permission.accesses;
+
+    const updatedAccesses = existingAccesses.filter((a) => a !== access);
+
+    return ctx.call('permissions.update', {
+      id: permission.id,
+      accesses: updatedAccesses,
+    });
+  }
+
+  @Action({
     params: {
       userId: {
         type: 'number',
