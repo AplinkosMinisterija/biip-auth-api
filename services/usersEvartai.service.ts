@@ -267,7 +267,6 @@ export default class UsersEvartaiService extends moleculer.Service {
         companyId: number;
         role: UserGroupRole;
         notify: Array<string>;
-        accesses: Array<string>;
         throwErrors: boolean;
       },
       AppAuthMeta & UserAuthMeta
