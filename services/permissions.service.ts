@@ -383,34 +383,59 @@ export default class PermissionsService extends moleculer.Service {
   }
 
   @Action({
-    rest: 'POST /assignAccessToGroup/:group',
+    rest: 'POST /modifyAccessForGroup/:group',
     params: {
-      group: { type: 'number' },
       access: { type: 'string' },
+      group: { type: 'number', convert: true },
+      app: { type: 'number', convert: true },
+      action: { type: 'enum', values: ['assign', 'unassign'] },
     },
   })
-  async assignAccessToGroup(
+  async modifyAccessForGroup(
     ctx: Context<{
       group: number;
+      app: number;
       access: string;
+      action: 'assign' | 'unassign';
     }>,
   ) {
-    const { group, access } = ctx.params;
+    const { group, app, access, action } = ctx.params;
 
     if (!group) {
       throwBadRequestError('Group should be passed.');
     }
 
     const permission: Permission = await ctx.call('permissions.findOne', {
-      query: { group },
+      query: { group, app },
     });
 
-    if (permission && permission.id) {
-      const existingAccesses = permission.accesses;
+    if (action === 'assign') {
+      if (permission && permission.id) {
+        const existingAccesses = Array.isArray(permission.accesses) ? permission.accesses : [];
 
-      const updatedAccesses = existingAccesses.includes(access)
-        ? existingAccesses
-        : [...existingAccesses, access];
+        const updatedAccesses = existingAccesses.includes(access)
+          ? existingAccesses
+          : [...existingAccesses, access];
+
+        return ctx.call('permissions.update', {
+          id: permission.id,
+          accesses: updatedAccesses,
+        });
+      }
+
+      return ctx.call('permissions.create', {
+        group,
+        app,
+        accesses: [access],
+      });
+    }
+
+    if (action === 'unassign') {
+      if (!permission || !permission.id) {
+        throwBadRequestError('Permission not found for this group.');
+      }
+
+      const updatedAccesses = permission.accesses.filter((a) => a !== access);
 
       return ctx.call('permissions.update', {
         id: permission.id,
@@ -418,45 +443,7 @@ export default class PermissionsService extends moleculer.Service {
       });
     }
 
-    return ctx.call('permissions.create', {
-      group,
-      accesses: [access],
-    });
-  }
-
-  @Action({
-    rest: 'POST /unassignAccessToGroup/:group',
-    params: {
-      group: { type: 'number' },
-      access: { type: 'string' },
-    },
-  })
-  async unassignAccessToGroup(
-    ctx: Context<{
-      group: number;
-      access: string;
-    }>,
-  ) {
-    const { group, access } = ctx.params;
-
-    if (!group) {
-      throwBadRequestError('Group should be passed.');
-    }
-
-    const permission: Permission = await ctx.call('permissions.findOne', {
-      query: { group },
-    });
-
-    if (!permission || !permission.id) {
-      throwBadRequestError('Permission not found for this group.');
-    }
-
-    const updatedAccesses = permission.accesses.filter((a) => a !== access);
-
-    return ctx.call('permissions.update', {
-      id: permission.id,
-      accesses: updatedAccesses,
-    });
+    throwBadRequestError('Invalid action. Must be either assign or unassign.');
   }
 
   @Action({
