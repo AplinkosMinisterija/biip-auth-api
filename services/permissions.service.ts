@@ -383,13 +383,13 @@ export default class PermissionsService extends moleculer.Service {
   }
 
   @Action({
-    rest: 'POST /assignAccess/:group',
+    rest: 'POST /assignAccessToGroup/:group',
     params: {
       group: { type: 'number' },
       access: { type: 'string' },
     },
   })
-  async assignAccess(
+  async assignAccessToGroup(
     ctx: Context<{
       group: number;
       access: string;
@@ -425,13 +425,13 @@ export default class PermissionsService extends moleculer.Service {
   }
 
   @Action({
-    rest: 'POST /unassignAccess/:group',
+    rest: 'POST /unassignAccessToGroup/:group',
     params: {
       group: { type: 'number' },
       access: { type: 'string' },
     },
   })
-  async unassignAccess(
+  async unassignAccessToGroup(
     ctx: Context<{
       group: number;
       access: string;
