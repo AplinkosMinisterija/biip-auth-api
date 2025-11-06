@@ -451,9 +451,7 @@ export default class PermissionsService extends moleculer.Service {
       throwBadRequestError('Permission not found for this group.');
     }
 
-    const existingAccesses = permission.accesses;
-
-    const updatedAccesses = existingAccesses.filter((a) => a !== access);
+    const updatedAccesses = permission.accesses.filter((a) => a !== access);
 
     return ctx.call('permissions.update', {
       id: permission.id,
