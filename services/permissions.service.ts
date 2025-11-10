@@ -16,7 +16,7 @@ import {
   throwUnauthorizedError,
 } from '../types';
 import { AppAuthMeta, UserAuthMeta } from './api.service';
-import { App, UsersAppAccesses } from './apps.service';
+import { App, AppType, UsersAppAccesses } from './apps.service';
 import { Group } from './groups.service';
 import { UserGroup, UserGroupRole } from './userGroups.service';
 import { User, UserType } from './users.service';
@@ -403,16 +403,17 @@ export default class PermissionsService extends moleculer.Service {
     >,
   ) {
     const { group, app, access, action } = ctx.params;
-    const currentApp = ctx.meta.app.id;
+    const currentApp = ctx?.meta?.app;
+    const canUseCustomAppId = Object.values(AppType).includes(currentApp?.type);
 
-    console.log(currentApp, 'currentApp', ctx.meta);
+    const appId = canUseCustomAppId ? app ?? currentApp?.id : currentApp?.id;
 
     if (!group) {
       throwBadRequestError('Group should be passed.');
     }
 
     const permission: Permission = await ctx.call('permissions.findOne', {
-      query: { group, app },
+      query: { group, app: appId },
     });
 
     if (action === 'assign') {
