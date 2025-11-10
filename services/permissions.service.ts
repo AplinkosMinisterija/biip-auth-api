@@ -383,23 +383,29 @@ export default class PermissionsService extends moleculer.Service {
   }
 
   @Action({
-    rest: 'POST /modifyAccessForGroup/:group',
+    rest: 'POST /modifyAccessForGroup',
     params: {
       access: { type: 'string' },
       group: { type: 'number', convert: true },
-      app: { type: 'number', convert: true },
+      app: { type: 'number', convert: true, optional: true },
       action: { type: 'enum', values: ['assign', 'unassign'] },
     },
   })
   async modifyAccessForGroup(
-    ctx: Context<{
-      group: number;
-      app: number;
-      access: string;
-      action: 'assign' | 'unassign';
-    }>,
+    ctx: Context<
+      {
+        group: number;
+        app: number;
+        access: string;
+        action: 'assign' | 'unassign';
+      },
+      any
+    >,
   ) {
     const { group, app, access, action } = ctx.params;
+    const currentApp = ctx.meta.app.id;
+
+    console.log(currentApp, 'currentApp', ctx.meta);
 
     if (!group) {
       throwBadRequestError('Group should be passed.');
@@ -810,7 +816,7 @@ export default class PermissionsService extends moleculer.Service {
   @Method
   async getPermissionsByAppAndUser(app: App, user: User): Promise<PermissionType | null> {
     const redisKey = `permissions.getPermissionsByAppAndUser:${app.id}:${user.id}`;
-    const permissions = (await this.broker.cacher.get(redisKey)) as Promise<PermissionType | null>;
+    const permissions = (await this.broker.cacher?.get(redisKey)) as Promise<PermissionType | null>;
     if (permissions) return permissions;
 
     const generatePermissionResult = (features?: Array<string>, accesses?: Array<string>) => {
