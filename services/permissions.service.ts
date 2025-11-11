@@ -432,7 +432,7 @@ export default class PermissionsService extends moleculer.Service {
 
       return ctx.call('permissions.create', {
         group,
-        app,
+        app: appId,
         accesses: [access],
       });
     }
