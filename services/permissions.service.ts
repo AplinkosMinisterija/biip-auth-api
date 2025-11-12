@@ -25,6 +25,12 @@ export enum PermissionRole {
   USER = 'USER',
   ADMIN = 'ADMIN',
 }
+
+export enum PermissionAction {
+  ASSIGN = 'assign',
+  UNASSIGN = 'unassign',
+}
+
 export interface Permission extends BaseModelInterface {
   user: number | User;
   group: number | Group;
@@ -388,7 +394,7 @@ export default class PermissionsService extends moleculer.Service {
       access: { type: 'string' },
       group: { type: 'number', convert: true },
       app: { type: 'number', convert: true, optional: true },
-      action: { type: 'enum', values: ['assign', 'unassign'] },
+      action: { type: 'enum', values: Object.values(PermissionAction) },
     },
   })
   async modifyAccessForGroup(
@@ -397,9 +403,9 @@ export default class PermissionsService extends moleculer.Service {
         group: number;
         app: number;
         access: string;
-        action: 'assign' | 'unassign';
+        action: PermissionAction;
       },
-      any
+      AppAuthMeta
     >,
   ) {
     const { group, app, access, action } = ctx.params;
@@ -412,12 +418,16 @@ export default class PermissionsService extends moleculer.Service {
       throwBadRequestError('Group should be passed.');
     }
 
+    if (!appId) {
+      throwBadRequestError('App ID is missing or invalid.');
+    }
+
     const permission: Permission = await ctx.call('permissions.findOne', {
       query: { group, app: appId },
     });
 
-    if (action === 'assign') {
-      if (permission && permission.id) {
+    if (action === PermissionAction.ASSIGN) {
+      if (permission?.id) {
         const existingAccesses = Array.isArray(permission.accesses) ? permission.accesses : [];
 
         const updatedAccesses = existingAccesses.includes(access)
@@ -437,8 +447,8 @@ export default class PermissionsService extends moleculer.Service {
       });
     }
 
-    if (action === 'unassign') {
-      if (!permission || !permission.id) {
+    if (action === PermissionAction.UNASSIGN) {
+      if (!permission?.id) {
         throwBadRequestError('Permission not found for this group.');
       }
 
