@@ -414,10 +414,6 @@ export default class PermissionsService extends moleculer.Service {
 
     const appId = canUseCustomAppId ? app ?? currentApp?.id : currentApp?.id;
 
-    if (!group) {
-      throwBadRequestError('Group should be passed.');
-    }
-
     if (!appId) {
       throwBadRequestError('App ID is missing or invalid.');
     }
