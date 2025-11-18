@@ -16,7 +16,7 @@ import {
   throwUnauthorizedError,
 } from '../types';
 import { AppAuthMeta, UserAuthMeta } from './api.service';
-import { App, UsersAppAccesses } from './apps.service';
+import { App, AppType, UsersAppAccesses } from './apps.service';
 import { Group } from './groups.service';
 import { UserGroup, UserGroupRole } from './userGroups.service';
 import { User, UserType } from './users.service';
@@ -25,6 +25,12 @@ export enum PermissionRole {
   USER = 'USER',
   ADMIN = 'ADMIN',
 }
+
+export enum PermissionAction {
+  ASSIGN = 'assign',
+  UNASSIGN = 'unassign',
+}
+
 export interface Permission extends BaseModelInterface {
   user: number | User;
   group: number | Group;
@@ -380,6 +386,77 @@ export default class PermissionsService extends moleculer.Service {
     }
 
     return ctx.call('permissions.create', data);
+  }
+
+  @Action({
+    rest: 'POST /modifyAccessForGroup',
+    params: {
+      access: { type: 'string' },
+      group: { type: 'number', convert: true },
+      app: { type: 'number', convert: true, optional: true },
+      action: { type: 'enum', values: Object.values(PermissionAction) },
+    },
+  })
+  async modifyAccessForGroup(
+    ctx: Context<
+      {
+        group: number;
+        app: number;
+        access: string;
+        action: PermissionAction;
+      },
+      AppAuthMeta
+    >,
+  ) {
+    const { group, app, access, action } = ctx.params;
+    const currentApp = ctx?.meta?.app;
+    const canUseCustomAppId = Object.values(AppType).includes(currentApp?.type);
+
+    const appId = canUseCustomAppId ? app ?? currentApp?.id : currentApp?.id;
+
+    if (!appId) {
+      throwBadRequestError('App ID is missing or invalid.');
+    }
+
+    const permission: Permission = await ctx.call('permissions.findOne', {
+      query: { group, app: appId },
+    });
+
+    if (action === PermissionAction.ASSIGN) {
+      if (permission?.id) {
+        const existingAccesses = Array.isArray(permission.accesses) ? permission.accesses : [];
+
+        const updatedAccesses = existingAccesses.includes(access)
+          ? existingAccesses
+          : [...existingAccesses, access];
+
+        return ctx.call('permissions.update', {
+          id: permission.id,
+          accesses: updatedAccesses,
+        });
+      }
+
+      return ctx.call('permissions.create', {
+        group,
+        app: appId,
+        accesses: [access],
+      });
+    }
+
+    if (action === PermissionAction.UNASSIGN) {
+      if (!permission?.id) {
+        throwBadRequestError('Permission not found for this group.');
+      }
+
+      const updatedAccesses = permission.accesses.filter((a) => a !== access);
+
+      return ctx.call('permissions.update', {
+        id: permission.id,
+        accesses: updatedAccesses,
+      });
+    }
+
+    throwBadRequestError('Invalid action. Must be either assign or unassign.');
   }
 
   @Action({
@@ -746,7 +823,7 @@ export default class PermissionsService extends moleculer.Service {
   @Method
   async getPermissionsByAppAndUser(app: App, user: User): Promise<PermissionType | null> {
     const redisKey = `permissions.getPermissionsByAppAndUser:${app.id}:${user.id}`;
-    const permissions = (await this.broker.cacher.get(redisKey)) as Promise<PermissionType | null>;
+    const permissions = (await this.broker.cacher?.get(redisKey)) as Promise<PermissionType | null>;
     if (permissions) return permissions;
 
     const generatePermissionResult = (features?: Array<string>, accesses?: Array<string>) => {
@@ -1065,6 +1142,8 @@ export default class PermissionsService extends moleculer.Service {
     if (!ctx.params.query.municipalities || !ctx.params.query.app) {
       ctx.params.query.app = { $exists: true };
     }
+
+    // TODO: Fix filtering by flag or find another solution
 
     return ctx;
   }
