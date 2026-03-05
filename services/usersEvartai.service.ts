@@ -302,15 +302,15 @@ export default class UsersEvartaiService extends moleculer.Service {
 
       return Promise.all(
         notify.map((email) => {
-          return sendEvartaiInvitationEmail(
-            email,
-            app.url,
-            app.settings?.productNameTo,
+          return sendEvartaiInvitationEmail(email, {
+            senderName: app.settings?.productName,
+            appUrl: app.url,
+            appName: app.settings?.productNameTo,
             inviterName,
-            inviter.email,
+            inviterEmail: inviter.email,
             inviteType,
-            !!app.settings?.isApp,
-          );
+            isApp: !!app.settings?.isApp,
+          });
         }),
       );
     };
