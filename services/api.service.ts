@@ -1,3 +1,4 @@
+import { Handlers } from '@sentry/node';
 import pick from 'lodash/pick';
 import moleculer, { Context, Errors } from 'moleculer';
 import { Action, Method, Service } from 'moleculer-decorators';
@@ -5,7 +6,6 @@ import ApiGateway from 'moleculer-web';
 import { EndpointType, RequestMessage } from '../types';
 import { App } from './apps.service';
 import { User, UserType } from './users.service';
-import { Handlers } from '@sentry/node';
 export interface UserAuthMeta {
   user: User;
   authToken: string;
@@ -50,6 +50,8 @@ function verifyApiKey(
         aliases: {
           'GET /ping': 'api.ping',
           'POST /login': 'auth.redirectEvartai',
+          'GET /api/public/htmlEnv': 'public.getHtmlEnv',
+          'GET /api/apps/login': 'apps.getLoginApps',
           '* /login/evartai': 'public.evartaiHtml',
         },
 
@@ -172,6 +174,11 @@ function verifyApiKey(
     logRequestParams: null,
     // Logging the response data. Set to any log level to enable it. E.g. "info"
     logResponseData: null,
+    assets: {
+      folder: 'public/assets',
+      // Options to `server-static` module
+      options: {},
+    },
   },
 })
 export default class ApiService extends moleculer.Service {

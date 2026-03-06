@@ -3,16 +3,17 @@
 import moleculer, { Context } from 'moleculer';
 import { Action, Method, Service } from 'moleculer-decorators';
 
-import { generateToken, verifyToken } from '../utils';
 import DbConnection from '../mixins/database.mixin';
 import {
-  COMMON_FIELDS,
-  COMMON_DEFAULT_SCOPES,
-  COMMON_SCOPES,
-  FieldHookCallback,
   BaseModelInterface,
+  COMMON_DEFAULT_SCOPES,
+  COMMON_FIELDS,
+  COMMON_SCOPES,
   DISABLE_REST_ACTIONS,
+  EndpointType,
+  FieldHookCallback,
 } from '../types';
+import { generateToken, verifyToken } from '../utils';
 import { AppAuthMeta } from './api.service';
 
 // default app types
@@ -38,6 +39,8 @@ export interface App extends BaseModelInterface {
     createUserOnEvartaiLogin: boolean;
     createCompanyOnEvartaiLogin: boolean;
     canInviteSelf: boolean;
+    svgIcon?: string;
+    isLoginApp?: string;
   };
 }
 
@@ -79,6 +82,13 @@ export interface App extends BaseModelInterface {
         type: 'object',
         required: true,
         properties: {
+          isLoginApp: {
+            type: 'boolean',
+            default: false,
+          },
+          svgIcon: {
+            type: 'string',
+          },
           createUserOnEvartaiLogin: {
             type: 'boolean',
             default: false,
@@ -210,6 +220,21 @@ export default class AppsService extends moleculer.Service {
   })
   async me(ctx: Context<{}, AppAuthMeta>) {
     return ctx.meta.app;
+  }
+
+  @Action({
+    rest: {
+      method: 'GET',
+      path: '/login',
+    },
+    auth: EndpointType.PUBLIC,
+  })
+  async getLoginApps(ctx: Context) {
+    const apps: App[] = await ctx.call('apps.find', {
+      sort: 'name',
+    });
+
+    return apps.filter((app) => !!app?.settings?.isLoginApp);
   }
 
   @Method
