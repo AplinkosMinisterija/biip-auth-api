@@ -10,7 +10,6 @@ import {
   COMMON_FIELDS,
   COMMON_SCOPES,
   DISABLE_REST_ACTIONS,
-  EndpointType,
   FieldHookCallback,
 } from '../types';
 import { generateToken, verifyToken } from '../utils';
@@ -222,13 +221,7 @@ export default class AppsService extends moleculer.Service {
     return ctx.meta.app;
   }
 
-  @Action({
-    rest: {
-      method: 'GET',
-      path: '/login',
-    },
-    auth: EndpointType.PUBLIC,
-  })
+  @Action()
   async getLoginApps(ctx: Context) {
     const apps: App[] = await ctx.call('apps.find', {
       sort: 'name',

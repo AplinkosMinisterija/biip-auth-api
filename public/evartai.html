@@ -131,7 +131,7 @@
         React.useEffect(() => {
           const fetchEnv = async () => {
             try {
-              const response = await fetch('/login/api/public/htmlEnv');
+              const response = await fetch('/api/public/htmlEnv');
               if (!response.ok) {
                 alert('Įvyko klaida, pabandykite vėliau.');
                 return;
@@ -147,7 +147,7 @@
 
           const loadApps = async () => {
             try {
-              const response = await fetch('login/api/apps/login', {
+              const response = await fetch('/api/apps/login', {
                 method: 'GET',
                 headers: { 'Content-Type': 'application/json' },
               });
