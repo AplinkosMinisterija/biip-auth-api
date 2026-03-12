@@ -39,6 +39,11 @@ function verifyApiKey(
   },
   settings: {
     port: process.env.PORT || 3000,
+    assets: {
+      folder: 'public',
+      // Options to `server-static` module
+      options: {},
+    },
 
     use: [Handlers.requestHandler(), Handlers.tracingHandler()],
 
@@ -174,11 +179,6 @@ function verifyApiKey(
     logRequestParams: null,
     // Logging the response data. Set to any log level to enable it. E.g. "info"
     logResponseData: null,
-    assets: {
-      folder: 'public',
-      // Options to `server-static` module
-      options: {},
-    },
   },
 })
 export default class ApiService extends moleculer.Service {
