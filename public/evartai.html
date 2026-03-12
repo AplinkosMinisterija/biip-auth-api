@@ -9,19 +9,113 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
-      * { box-sizing: border-box; margin: 0; padding: 0; }
-      html, body { height: 100%; font-family: Arial, sans-serif; }
-      .container { display: flex; height: 100vh; width: 100%; }
-      .left { flex: 1; background-image: url('/login/evartai-assets/background.png'); background-size: cover; background-position: center; }
-      .right { flex: 1; background-color: white; display: flex; justify-content: center; align-items: center; padding: 40px; }
-      .content { max-width: 400px; width: 100%; }
-      .logo { font-size: 32px; font-weight: bold; color: #003366; margin-bottom: 10px; text-decoration: none; display: inline-block; }
-      .subtitle { font-size: 14px; color: #555; margin-bottom: 90px; }
-      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-      .card { height: 120px; min-width: 240px; padding: 16px; border-radius: 4px; border: 1px solid #CDD5DF; background-color: #FFFFFF; cursor: pointer; display: flex; flex-direction: column; gap: 16px; transition: background-color 0.2s; }
-      .card:hover { background-color: #e0e0e0; }
-      .card-description { font-weight: 400; font-size: 14px; line-height: 1; color: #4B5565; }
-      @media (max-width: 768px) { .container { flex-direction: column; } .left { display: none; } .right { width: 100%; padding: 20px; } .grid { grid-template-columns: 1fr; } .card { min-width: 140px; } }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html,
+      body {
+        height: 100%;
+        font-family: Arial, sans-serif;
+      }
+
+      .container {
+        display: flex;
+        height: 100vh;
+        width: 100%;
+      }
+
+      .left {
+        flex: 1;
+        background-image: url('https://rusys.biip.lt/LoginImage.jpg');
+        background-size: cover;
+        background-position: center;
+      }
+
+      .right {
+        flex: 1;
+        background-color: white;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 40px;
+      }
+
+      .content {
+        max-width: 400px;
+        width: 100%;
+      }
+
+      .logo {
+        font-size: 32px;
+        font-weight: bold;
+        color: #003366;
+        margin-bottom: 10px;
+        text-decoration: none;
+        display: inline-block;
+      }
+
+      .subtitle {
+        font-size: 14px;
+        color: #555;
+        margin-bottom: 90px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+
+      .card {
+        height: 120px;
+        min-width: 240px;
+        padding: 16px;
+        border-radius: 4px;
+        border: 1px solid #CDD5DF;
+        background-color: #FFFFFF;
+        cursor: pointer;
+        transition: background-color 0.2s;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .card:hover {
+        background-color: #e0e0e0;
+      }
+
+      .card-description {
+        font-weight: 400;
+        font-size: 14px;
+        line-height: 1;
+        color: #4B5565;
+      }
+
+      @media (max-width: 768px) {
+        .container {
+          flex-direction: column;
+        }
+
+        .left {
+          display: none;
+        }
+
+        .right {
+          width: 100%;
+          padding: 20px;
+        }
+
+        .grid {
+          grid-template-columns: 1fr;
+        }
+
+        .card {
+          min-width: 140px;
+        }
+      }
     </style>
   </head>
   <body>
@@ -37,20 +131,39 @@
         React.useEffect(() => {
           const fetchEnv = async () => {
             try {
-              const response = await fetch('/login/api/public/htmlEnv');
-              if (!response.ok) { alert('Įvyko klaida, pabandykite vėliau.'); return; }
-              setEnv(await response.json());
-            } catch { alert('Klaida jungiantis prie serverio.'); }
-            finally { setEnvLoading(false); }
+              const response = await fetch('/api/public/htmlEnv');
+              if (!response.ok) {
+                alert('Įvyko klaida, pabandykite vėliau.');
+                return;
+              }
+              const data = await response.json();
+              setEnv(data);
+            } catch (error) {
+              alert('Klaida jungiantis prie serverio.');
+            } finally {
+              setEnvLoading(false);
+            }
           };
 
           const loadApps = async () => {
             try {
-              const response = await fetch('/login/api/apps/login');
-              if (!response.ok) { alert('Įvyko klaida, pabandykite vėliau.'); return; }
-              setApps(await response.json());
-            } catch { alert('Klaida jungiantis prie serverio.'); }
-            finally { setLoading(false); }
+              const response = await fetch('/api/apps/login', {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' },
+              });
+
+              if (!response.ok) {
+                alert('Įvyko klaida, pabandykite vėliau.');
+                return;
+              }
+
+              const data = await response.json();
+              setApps(data);
+            } catch (error) {
+              alert('Klaida jungiantis prie serverio.');
+            } finally {
+              setLoading(false);
+            }
           };
 
           fetchEnv();
@@ -64,9 +177,28 @@
         };
 
         const Loader = () => (
-          <svg xmlns="http://www.w3.org/2000/svg" width="40px" height="40px" viewBox="0 0 50 50">
-            <path fill="#000" d="M43.935,25.145c0-10.318-8.364-18.683-18.683-18.683 c-10.318,0-18.683,8.365-18.683,18.683h4.068 c0-8.071,6.543-14.615,14.615-14.615 c8.072,0,14.615,6.543,14.615,14.615H43.935z">
-              <animateTransform attributeType="xml" attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="0.6s" repeatCount="indefinite"/>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="40px"
+            height="40px"
+            viewBox="0 0 50 50"
+          >
+            <path
+              fill="#000"
+              d="M43.935,25.145c0-10.318-8.364-18.683-18.683-18.683
+                c-10.318,0-18.683,8.365-18.683,18.683h4.068
+                c0-8.071,6.543-14.615,14.615-14.615
+                c8.072,0,14.615,6.543,14.615,14.615H43.935z"
+            >
+              <animateTransform
+                attributeType="xml"
+                attributeName="transform"
+                type="rotate"
+                from="0 25 25"
+                to="360 25 25"
+                dur="0.6s"
+                repeatCount="indefinite"
+              />
             </path>
           </svg>
         );
@@ -79,19 +211,39 @@
             <div className="right">
               <div className="content">
                 <a href={env?.HTML_LOGO_URL || '#'} id="logobtn">
-                  <img src={env?.HTML_LOGO_ICON_URL} width="81" height="49" alt="Logo"/>
+                  <img
+                    src={env?.HTML_LOGO_ICON_URL}
+                    width="81"
+                    height="49"
+                    alt="Logo"
+                  />
                 </a>
+
                 <div className="subtitle">{env?.HTML_SUBTITLE}</div>
-                {loading ? <Loader /> :
+
+                {loading ? (
+                  <Loader />
+                ) : (
                   <div className="grid">
-                    {apps.map((app, index) => (
-                      <div key={index} className="card" onClick={() => handleAppClick(app.url)}>
-                        <div dangerouslySetInnerHTML={{ __html: app.settings?.svgIcon }} />
-                        <div className="card-description">{app.settings?.description}</div>
-                      </div>
-                    ))}
+                    {apps
+                      .map((app, index) => (
+                        <div
+                          className="card"
+                          key={index}
+                          onClick={() => handleAppClick(app.url)}
+                        >
+                          <div
+                            dangerouslySetInnerHTML={{
+                              __html: app.settings?.svgIcon,
+                            }}
+                          />
+                          <div className="card-description">
+                            {app.settings?.description}
+                          </div>
+                        </div>
+                      ))}
                   </div>
-                }
+                )}
               </div>
             </div>
           </div>
