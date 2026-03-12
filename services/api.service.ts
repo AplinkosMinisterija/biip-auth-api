@@ -50,8 +50,8 @@ function verifyApiKey(
         aliases: {
           'GET /ping': 'api.ping',
           'POST /login': 'auth.redirectEvartai',
-          'GET /api/public/htmlEnv': 'public.getHtmlEnv',
-          'GET /api/apps/login': 'apps.getLoginApps',
+          'GET /login/api/public/htmlEnv': 'public.getHtmlEnv',
+          'GET /login/api/apps/login': 'apps.getLoginApps',
           '* /login/evartai': 'public.evartaiHtml',
         },
 

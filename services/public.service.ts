@@ -2,7 +2,6 @@
 import { readFileSync } from 'fs';
 import moleculer, { Context } from 'moleculer';
 import { Action, Service } from 'moleculer-decorators';
-import { EndpointType } from '../types';
 
 @Service({
   name: 'public',
@@ -14,14 +13,7 @@ export default class PublicService extends moleculer.Service {
     return readFileSync('./public/evartai.html');
   }
 
-  @Action({
-    rest: {
-      method: 'GET',
-      basePath: '',
-      path: '/htmlEnv',
-    },
-    auth: EndpointType.PUBLIC,
-  })
+  @Action()
   getHtmlEnv() {
     const env = process.env;
     return {
