@@ -17,6 +17,7 @@ export default class PublicService extends moleculer.Service {
   @Action({
     rest: {
       method: 'GET',
+      basePath: '',
       path: '/htmlEnv',
     },
     auth: EndpointType.PUBLIC,
