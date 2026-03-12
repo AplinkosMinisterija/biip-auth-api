@@ -66,15 +66,6 @@ function verifyApiKey(
         },
       },
       {
-        path: '/login/evartai-assets',
-        authorization: false,
-        authentication: false,
-        assets: {
-          folder: 'public/evartai-assets', // move your background.png here
-          options: {},
-        },
-      },
-      {
         path: '/api/openapi',
         authorization: false,
         authentication: false,
