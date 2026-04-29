@@ -18,8 +18,7 @@ import {
   throwValidationError,
 } from '../types';
 
-import { companyCode as companyCodeChecker } from 'lt-codes';
-
+import { isValidCompanyCode } from '../utils';
 import { toggleItemInArray } from '../utils/array';
 import { AppAuthMeta, UserAuthMeta } from './api.service';
 import { App } from './apps.service';
@@ -748,9 +747,7 @@ export default class GroupsService extends moleculer.Service {
         return `Company with company code '${value}' already exists.`;
       }
 
-      const { isValid } = companyCodeChecker.validate(value);
-
-      if (!isValid) return 'Invalid company code';
+      if (!isValidCompanyCode(value)) return 'Invalid company code';
     }
 
     return true;

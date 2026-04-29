@@ -3,7 +3,7 @@
 import moleculer, { Context } from 'moleculer';
 import { Action, Method, Service } from 'moleculer-decorators';
 
-import { companyCode as companyCodeChecker, personalCode as personalCodeChecker } from 'lt-codes';
+import { personalCode as personalCodeChecker } from 'lt-codes';
 
 import DbConnection from '../mixins/database.mixin';
 import {
@@ -15,7 +15,12 @@ import {
   throwBadRequestError,
   throwNotFoundError,
 } from '../types';
-import { emailCanBeSent, normalizeName, sendEvartaiInvitationEmail } from '../utils';
+import {
+  emailCanBeSent,
+  isValidCompanyCode,
+  normalizeName,
+  sendEvartaiInvitationEmail,
+} from '../utils';
 import { AppAuthMeta, UserAuthMeta } from './api.service';
 import { App } from './apps.service';
 import { Group } from './groups.service';
@@ -327,8 +332,7 @@ export default class UsersEvartaiService extends moleculer.Service {
     }
 
     if (companyCode) {
-      const { isValid } = companyCodeChecker.validate(companyCode);
-      if (!isValid) {
+      if (!isValidCompanyCode(companyCode)) {
         throw new moleculer.Errors.ValidationError(
           `Company code '${companyCode}' is invalid.`,
           'AUTH_INVALID_COMPANY_CODE',
@@ -387,11 +391,9 @@ export default class UsersEvartaiService extends moleculer.Service {
           if (!throwErrors) return returnData;
 
           // company code is invalid for custom app groups
-          const { isValid: isValidCompanyCode } = companyCodeChecker.validate(company.companyCode);
-
           throw new moleculer.Errors.ValidationError(
             `User already assigned to '${companyId}' company.`,
-            isValidCompanyCode ? 'AUTH_USER_ASSIGNED' : 'AUTH_USER_EXISTS',
+            isValidCompanyCode(company.companyCode) ? 'AUTH_USER_ASSIGNED' : 'AUTH_USER_EXISTS',
           );
         }
 
