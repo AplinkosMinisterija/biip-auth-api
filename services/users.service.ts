@@ -256,6 +256,21 @@ export default class UsersService extends moleculer.Service {
     return !!(user && user.id);
   }
 
+  // Bypasses updateEntity so no `users.updated` event fires — that event would
+  // bust permissions cache for ALL users on every login (see permissions.service
+  // cacheCleanEvents). Caller must have already validated the user exists;
+  // adapter.updateById skips default scopes (notDeleted) and field validation.
+  @Action({
+    params: {
+      id: 'number|convert',
+    },
+  })
+  async updateLastLogin(ctx: Context<{ id: number }>) {
+    const adapter = await this.getAdapter(ctx);
+    await adapter.updateById(ctx.params.id, { lastLoggedInAt: new Date() });
+    return { success: true };
+  }
+
   /**
    * Get user by JWT token (for API GW authentication)
    */

@@ -597,6 +597,12 @@ export default class PermissionsService extends moleculer.Service {
     });
   }
 
+  // Hot path: called via `auth.parseToken` on every authenticated request when
+  // the parseToken cache misses. Keep this lightweight — query inheritedUserApps
+  // directly instead of resolving the full user with inheritedApps populate
+  // (which N+1's apps.resolve and forces an extra hop through the user record).
+  // Cache enabled to absorb thundering herds; cleaned via `cacheCleanEvents`
+  // above when the underlying permissions actually change.
   @Action({
     params: {
       userId: {
@@ -608,24 +614,19 @@ export default class PermissionsService extends moleculer.Service {
         convert: true,
       },
     },
-    // cache: {
-    //   keys: ['userId', 'appId'],
-    // },
+    cache: {
+      keys: ['userId', 'appId'],
+      ttl: 60 * 5,
+    },
   })
   async validatePermissionToAccessApp(ctx: Context<{ userId: number; appId: number }>) {
-    const app: App = await ctx.call('apps.resolve', { id: ctx.params.appId });
-    const user: User = await ctx.call('users.resolve', {
-      id: ctx.params.userId,
-      populate: 'inheritedApps',
+    const { userId, appId } = ctx.params;
+
+    const appsIds: number[] = await ctx.call('inheritedUserApps.getAppsByUser', {
+      user: userId,
     });
 
-    if (!app || !user) {
-      throwNotFoundError('App not found');
-    }
-
-    const hasApp = user.inheritedApps.some((a: App) => a.id == app.id);
-
-    if (!hasApp) {
+    if (!appsIds?.some((id) => id == appId)) {
       throwUnauthorizedError('Unauthorized to access app');
     }
 

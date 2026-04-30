@@ -78,7 +78,9 @@ const brokerConfig: BrokerOptions = {
   serializer: 'JSON',
 
   // Number of milliseconds to wait before reject a request with a RequestTimeout error. Disabled: 0
-  requestTimeout: 10 * 1000,
+  // Bumped from 10s to give the slow inherited_user_apps view headroom under
+  // load while we work on materializing it. Recalibrate once we have data.
+  requestTimeout: 30 * 1000,
 
   // Retry policy settings. More info: https://moleculer.services/docs/0.14/fault-tolerance.html#Retry
   retryPolicy: {
