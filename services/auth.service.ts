@@ -56,7 +56,7 @@ export default class AuthService extends moleculer.Service {
 
     const user = await this.getValidatedUser(id, ctx.meta.app);
 
-    await ctx.call('users.update', { id: user.id, lastLoggedInAt: new Date() });
+    await ctx.call('users.updateLastLogin', { id: user.id });
     // TODO: save refresh token to check in refresh
     return this.generateToken(user, AuthStrategy.LOCAL, strategyId, refresh);
   }
@@ -137,7 +137,7 @@ export default class AuthService extends moleculer.Service {
 
     const user = await this.getValidatedUser(id, ctx.meta.app);
 
-    await ctx.call('users.update', { id: user.id, lastLoggedInAt: new Date() });
+    await ctx.call('users.updateLastLogin', { id: user.id });
 
     return this.generateToken(user, AuthStrategy.EVARTAI, strategyId, refresh);
   }
@@ -169,7 +169,7 @@ export default class AuthService extends moleculer.Service {
 
     const user = await this.getValidatedUser(id, ctx.meta.app);
 
-    await ctx.call('users.update', { id: user.id, lastLoggedInAt: new Date() });
+    await ctx.call('users.updateLastLogin', { id: user.id });
 
     return this.generateToken(user, strategy, strategyId, true);
   }
@@ -264,20 +264,19 @@ export default class AuthService extends moleculer.Service {
   })
   async parseToken(ctx: Context<{ token: string }, AppAuthMeta>) {
     const token = ctx.params.token;
-    try {
-      const result: any = await verifyToken(token);
-      if (result && result.id) {
-        await this.broker.call('permissions.validatePermissionToAccessApp', {
-          appId: ctx.meta.app.id,
-          userId: result.id,
-        });
+    // Don't catch — moleculer caches successful returns. If we cached `{}` on a
+    // transient DB timeout in validatePermissionToAccessApp, the user would be
+    // locked out for the full TTL. Letting the error propagate keeps the cache
+    // empty so the next request retries.
+    const result: any = await verifyToken(token);
+    if (!result || !result.id) return {};
 
-        return result;
-      }
-    } catch (e) {
-      this.logger.error('Error resolving token', token, e);
-    }
-    return {};
+    await this.broker.call('permissions.validatePermissionToAccessApp', {
+      appId: ctx.meta.app.id,
+      userId: result.id,
+    });
+
+    return result;
   }
 
   @Action({
