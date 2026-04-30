@@ -616,7 +616,7 @@ export default class PermissionsService extends moleculer.Service {
     },
     cache: {
       keys: ['userId', 'appId'],
-      ttl: 60 * 5,
+      ttl: 60 * 60,
     },
   })
   async validatePermissionToAccessApp(ctx: Context<{ userId: number; appId: number }>) {

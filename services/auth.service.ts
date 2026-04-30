@@ -57,6 +57,7 @@ export default class AuthService extends moleculer.Service {
     const user = await this.getValidatedUser(id, ctx.meta.app);
 
     await ctx.call('users.updateLastLogin', { id: user.id });
+    this.warmPermissionsCache(user.id, ctx.meta.app.id);
     // TODO: save refresh token to check in refresh
     return this.generateToken(user, AuthStrategy.LOCAL, strategyId, refresh);
   }
@@ -138,6 +139,7 @@ export default class AuthService extends moleculer.Service {
     const user = await this.getValidatedUser(id, ctx.meta.app);
 
     await ctx.call('users.updateLastLogin', { id: user.id });
+    this.warmPermissionsCache(user.id, ctx.meta.app.id);
 
     return this.generateToken(user, AuthStrategy.EVARTAI, strategyId, refresh);
   }
@@ -170,6 +172,7 @@ export default class AuthService extends moleculer.Service {
     const user = await this.getValidatedUser(id, ctx.meta.app);
 
     await ctx.call('users.updateLastLogin', { id: user.id });
+    this.warmPermissionsCache(user.id, ctx.meta.app.id);
 
     return this.generateToken(user, strategy, strategyId, true);
   }
@@ -453,6 +456,24 @@ export default class AuthService extends moleculer.Service {
     }
 
     return user;
+  }
+
+  // Fire-and-forget pre-warm of permissions.validatePermissionToAccessApp cache
+  // (keyed by userId+appId, 1h TTL). Login already paid the inheritedUserApps
+  // query cost via getValidatedUser; this second call repopulates the cache so
+  // the user's first /api/users/me hits a warm cache instead of the slow view.
+  // Errors swallowed — pre-warm failure must not break login.
+  @Method
+  warmPermissionsCache(userId: number, appId: number): void {
+    this.broker
+      .call('permissions.validatePermissionToAccessApp', { userId, appId })
+      .catch((e: any) =>
+        this.logger.warn('Permission cache pre-warm failed', {
+          userId,
+          appId,
+          error: e?.message,
+        }),
+      );
   }
 
   @Method
