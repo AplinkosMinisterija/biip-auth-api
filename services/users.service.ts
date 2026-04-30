@@ -258,7 +258,8 @@ export default class UsersService extends moleculer.Service {
 
   // Bypasses updateEntity so no `users.updated` event fires — that event would
   // bust permissions cache for ALL users on every login (see permissions.service
-  // cacheCleanEvents).
+  // cacheCleanEvents). Caller must have already validated the user exists;
+  // adapter.updateById skips default scopes (notDeleted) and field validation.
   @Action({
     params: {
       id: 'number|convert',
