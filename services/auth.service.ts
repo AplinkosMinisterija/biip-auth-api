@@ -264,11 +264,18 @@ export default class AuthService extends moleculer.Service {
   })
   async parseToken(ctx: Context<{ token: string }, AppAuthMeta>) {
     const token = ctx.params.token;
-    // Don't catch — moleculer caches successful returns. If we cached `{}` on a
-    // transient DB timeout in validatePermissionToAccessApp, the user would be
-    // locked out for the full TTL. Letting the error propagate keeps the cache
-    // empty so the next request retries.
-    const result: any = await verifyToken(token);
+    // Catch verifyToken (JWT) errors — a malformed/expired token is deterministic
+    // per token, so caching {} for that token is fine; it'll never become valid.
+    // Do NOT catch errors from validatePermissionToAccessApp — that path can fail
+    // transiently (DB timeout, view stall), and caching {} would lock a real user
+    // out for the full 1h TTL. Let those errors propagate so the next request retries.
+    let result: any;
+    try {
+      result = await verifyToken(token);
+    } catch (e) {
+      this.logger.error('Error resolving token', token, e);
+      return {};
+    }
     if (!result || !result.id) return {};
 
     await this.broker.call('permissions.validatePermissionToAccessApp', {
