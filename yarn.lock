@@ -3874,9 +3874,9 @@ lru-queue@0.1:
   dependencies:
     es5-ext "~0.10.2"
 
-"lt-codes@github:ambrazasp/lt-codes":
-  version "1.0.0"
-  resolved "https://codeload.github.com/ambrazasp/lt-codes/tar.gz/a3dd47207f1f1a8cc94ecd300b59c0af189351bf"
+"lt-codes@github:AplinkosMinisterija/lt-codes#v1.1.2":
+  version "1.1.2"
+  resolved "https://codeload.github.com/AplinkosMinisterija/lt-codes/tar.gz/9938111ffa8212cfccda00938c5a502cd7f4bc97"
   dependencies:
     moment "^2.29.4"
 
