@@ -420,7 +420,17 @@ export default class AuthService extends moleculer.Service {
     return { success: true };
   }
 
-  @Action()
+  // Heavy: pulls every USER-type user, populates inheritedApps for the whole
+  // batch (which forces inherited_user_apps view scan with N user_ids in IN
+  // clause — minutes-long query under load). Callers (żvejyba/medžioklė/maps)
+  // typically hit this once at boot, so a 6h cache stops them from cratering
+  // auth-api during restarts. Staleness window is acceptable for seed data.
+  @Action({
+    cache: {
+      keys: ['#app.id'],
+      ttl: 60 * 60 * 6,
+    },
+  })
   async getSeedData(ctx: Context<{ hash: string }, AppAuthMeta>) {
     const users: Array<User> = await ctx.call('users.find', {
       query: {
