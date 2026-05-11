@@ -137,7 +137,9 @@ function verifyApiKey(
         // The gateway will dynamically build the full routes from service schema.
         autoAliases: true,
 
-        aliases: {},
+        aliases: {
+          'POST /users/:userId/impersonate': 'auth.impersonateUser',
+        },
 
         // Enable authentication. Implement the logic into `authenticate` method. More info: https://moleculer.services/docs/0.14/moleculer-web.html#Authentication
         authentication: true,
