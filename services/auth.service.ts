@@ -76,7 +76,7 @@ export default class AuthService extends moleculer.Service {
     },
     types: [EndpointType.SUPER_ADMIN],
   })
-  async impersonateUser(ctx: Context<{ userId: number }, AppAuthMeta>) {
+  async impersonateUser(ctx: Context<{ userId: number }, AppAuthMeta & UserAuthMeta>) {
     const { userId } = ctx.params;
 
     const user: User = await this.getValidatedUser(userId, ctx.meta.app);
@@ -106,6 +106,13 @@ export default class AuthService extends moleculer.Service {
     if (!strategy || !strategyId) {
       return throwNotFoundError('User strategy not found.');
     }
+
+    this.logger.warn('IMPERSONATE', {
+      actor: { id: ctx.meta.user?.id, email: ctx.meta.user?.email },
+      target: { id: user.id, email: user.email },
+      app: ctx.meta.app?.id,
+      strategy,
+    });
 
     return this.generateToken(user, strategy, strategyId, false);
   }
