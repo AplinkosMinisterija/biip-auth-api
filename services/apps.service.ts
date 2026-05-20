@@ -10,6 +10,7 @@ import {
   COMMON_FIELDS,
   COMMON_SCOPES,
   DISABLE_REST_ACTIONS,
+  EndpointType,
   FieldHookCallback,
 } from '../types';
 import { generateToken, verifyToken } from '../utils';
@@ -150,6 +151,7 @@ export interface App extends BaseModelInterface {
 export default class AppsService extends moleculer.Service {
   @Action({
     rest: 'POST /:id/generate',
+    types: [EndpointType.SUPER_ADMIN],
     params: {
       id: {
         type: 'number',

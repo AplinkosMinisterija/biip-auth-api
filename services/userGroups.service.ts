@@ -10,6 +10,7 @@ import {
   COMMON_DEFAULT_SCOPES,
   COMMON_SCOPES,
   BaseModelInterface,
+  EndpointType,
   throwNotFoundError,
 } from '../types';
 import { User } from './users.service';
@@ -247,6 +248,7 @@ export default class UserGroupsService extends moleculer.Service {
   }
 
   @Action({
+    types: [EndpointType.ADMIN, EndpointType.SUPER_ADMIN],
     params: {
       source: {
         type: 'number',
@@ -281,6 +283,7 @@ export default class UserGroupsService extends moleculer.Service {
       path: '/assign',
       basePath: '/users/:user/groups/:group',
     },
+    types: [EndpointType.ADMIN, EndpointType.SUPER_ADMIN],
     params: {
       user: {
         type: 'number',
@@ -327,6 +330,7 @@ export default class UserGroupsService extends moleculer.Service {
       path: '/unassign',
       basePath: '/users/:user/groups/:group',
     },
+    types: [EndpointType.ADMIN, EndpointType.SUPER_ADMIN],
     params: {
       user: {
         type: 'number',

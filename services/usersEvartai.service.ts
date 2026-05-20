@@ -11,6 +11,7 @@ import {
   COMMON_DEFAULT_SCOPES,
   COMMON_FIELDS,
   COMMON_SCOPES,
+  EndpointType,
   FieldHookCallback,
   throwBadRequestError,
   throwNotFoundError,
@@ -225,6 +226,7 @@ export default class UsersEvartaiService extends moleculer.Service {
       path: '/invite',
       basePath: '/users',
     },
+    types: [EndpointType.ADMIN, EndpointType.SUPER_ADMIN],
     params: {
       personalCode: {
         type: 'string',

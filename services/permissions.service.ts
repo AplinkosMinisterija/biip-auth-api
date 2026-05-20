@@ -320,6 +320,7 @@ export default class PermissionsService extends moleculer.Service {
 
   @Action({
     rest: 'POST /',
+    types: [EndpointType.ADMIN, EndpointType.SUPER_ADMIN],
     params: {
       user: {
         type: 'number',
@@ -393,6 +394,7 @@ export default class PermissionsService extends moleculer.Service {
 
   @Action({
     rest: 'POST /modifyAccessForGroup',
+    types: [EndpointType.ADMIN, EndpointType.SUPER_ADMIN],
     params: {
       access: { type: 'string' },
       group: { type: 'number', convert: true },
@@ -689,6 +691,7 @@ export default class PermissionsService extends moleculer.Service {
 
   @Action({
     rest: 'POST /municipalities',
+    types: [EndpointType.ADMIN, EndpointType.SUPER_ADMIN],
     params: {
       group: {
         type: 'number',
@@ -764,6 +767,7 @@ export default class PermissionsService extends moleculer.Service {
 
   @Action({
     rest: 'GET /municipalities/:municipality/users',
+    types: [EndpointType.ADMIN, EndpointType.SUPER_ADMIN],
     cache: {
       keys: ['#app.id', 'municipality', 'role'],
     },
