@@ -142,7 +142,20 @@ export interface App extends BaseModelInterface {
     after: {
       create: [
         async function (ctx: Context, data: any) {
+          await this.broker.cacher?.clean('auth.redirectAllowedOrigins');
           return await ctx.call('apps.regenerateApiKey', { id: data.id });
+        },
+      ],
+      update: [
+        async function (_ctx: Context, data: any) {
+          await this.broker.cacher?.clean('auth.redirectAllowedOrigins');
+          return data;
+        },
+      ],
+      remove: [
+        async function (_ctx: Context, data: any) {
+          await this.broker.cacher?.clean('auth.redirectAllowedOrigins');
+          return data;
         },
       ],
     },
