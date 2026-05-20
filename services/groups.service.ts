@@ -456,7 +456,12 @@ export default class GroupsService extends moleculer.Service {
     let groupIds: number[];
     if (user.type === UserType.SUPER_ADMIN) {
       const groupsWithApp: Array<InheritedGroupApp> = await ctx.call('inheritedGroupApps.find', {
-        query: { $raw: `inherited_apps_ids @> ANY (ARRAY ['${app.id}']::jsonb[])` },
+        query: {
+          $raw: {
+            condition: `inherited_apps_ids @> ?::jsonb`,
+            bindings: [JSON.stringify([Number(app.id)])],
+          },
+        },
       });
 
       groupIds = groupsWithApp.map((item) => item.group as number);
@@ -580,7 +585,10 @@ export default class GroupsService extends moleculer.Service {
         ctx.params.query.parent = {
           $exists: false,
         };
-        ctx.params.query.$raw = `apps_ids @> ANY (ARRAY ['${app.id}']::jsonb[])`;
+        ctx.params.query.$raw = {
+          condition: `apps_ids @> ?::jsonb`,
+          bindings: [JSON.stringify([Number(app.id)])],
+        };
       } else {
         const userGroups = await ctx.call('userGroups.find', {
           query: { user: user.id, role: UserGroupRole.ADMIN },
