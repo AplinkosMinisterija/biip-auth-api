@@ -219,6 +219,14 @@ export default class UsersEvartaiService extends moleculer.Service {
     }
   }
 
+  // NOTE: this action is intentionally USER-callable. It is the entry point
+  // for fisher / hunter / forester self-service "invite my company" flows
+  // (see `users.invite.spec.ts` "Acting as fisher"). Per-company permission
+  // is enforced one layer down: the `companyCode` path goes through
+  // `groups.create` -> `validateIfCanBeCreated`, which checks parent
+  // ownership. The `personalCode + companyId` path still has a known gap
+  // (caller is not verified against `companyId`) — tracked as a separate
+  // follow-up so it can carry its own tests, not bolted onto this PR.
   @Action({
     rest: {
       method: 'POST',

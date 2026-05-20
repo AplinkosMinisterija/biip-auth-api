@@ -208,7 +208,10 @@ export default class PermissionsService extends moleculer.Service {
         accesses: {
           $exists: true,
         },
-        $raw: `"accesses" @> ANY (ARRAY ['"${access}"']::jsonb[])`,
+        $raw: {
+          condition: `"accesses" @> ?::jsonb`,
+          bindings: [JSON.stringify([access])],
+        },
       },
     });
 
@@ -317,6 +320,7 @@ export default class PermissionsService extends moleculer.Service {
 
   @Action({
     rest: 'POST /',
+    types: [EndpointType.ADMIN, EndpointType.SUPER_ADMIN],
     params: {
       user: {
         type: 'number',
@@ -390,6 +394,7 @@ export default class PermissionsService extends moleculer.Service {
 
   @Action({
     rest: 'POST /modifyAccessForGroup',
+    types: [EndpointType.ADMIN, EndpointType.SUPER_ADMIN],
     params: {
       access: { type: 'string' },
       group: { type: 'number', convert: true },
@@ -686,6 +691,7 @@ export default class PermissionsService extends moleculer.Service {
 
   @Action({
     rest: 'POST /municipalities',
+    types: [EndpointType.ADMIN, EndpointType.SUPER_ADMIN],
     params: {
       group: {
         type: 'number',
@@ -761,11 +767,12 @@ export default class PermissionsService extends moleculer.Service {
 
   @Action({
     rest: 'GET /municipalities/:municipality/users',
+    types: [EndpointType.ADMIN, EndpointType.SUPER_ADMIN],
     cache: {
       keys: ['#app.id', 'municipality', 'role'],
     },
     params: {
-      municipality: 'string',
+      municipality: 'number|convert',
       role: {
         type: 'string',
         optional: true,
@@ -780,7 +787,10 @@ export default class PermissionsService extends moleculer.Service {
 
     const permissions: Array<Permission> = await ctx.call('permissions.find', {
       query: {
-        $raw: `municipalities @> ANY (ARRAY ['${municipality}']::jsonb[])`,
+        $raw: {
+          condition: `municipalities @> ?::jsonb`,
+          bindings: [JSON.stringify([municipality])],
+        },
         group: { $exists: true },
       },
     });
@@ -1101,7 +1111,10 @@ export default class PermissionsService extends moleculer.Service {
   async getCompanyIdsByApp(appId: number) {
     const groups: Array<Group> = await this.broker.call('groups.find', {
       query: {
-        $raw: `apps_ids @> ANY (ARRAY ['${appId}']::jsonb[])`,
+        $raw: {
+          condition: `apps_ids @> ?::jsonb`,
+          bindings: [JSON.stringify([Number(appId)])],
+        },
         companyCode: { $exists: true },
       },
       fields: ['id'],

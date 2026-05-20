@@ -100,7 +100,10 @@ export default class InheritedUserAppsService extends moleculer.Service {
   })
   async getUserIdsByApp(ctx: Context<{ users?: number[]; app: number; type?: UserType }>) {
     const query: any = {
-      $raw: `inherited_apps_ids @> ANY (ARRAY ['${ctx.params.app}']::jsonb[])`,
+      $raw: {
+        condition: `inherited_apps_ids @> ?::jsonb`,
+        bindings: [JSON.stringify([Number(ctx.params.app)])],
+      },
     };
 
     if (ctx.params.users?.length) {

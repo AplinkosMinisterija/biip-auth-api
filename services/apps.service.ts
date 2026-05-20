@@ -10,6 +10,7 @@ import {
   COMMON_FIELDS,
   COMMON_SCOPES,
   DISABLE_REST_ACTIONS,
+  EndpointType,
   FieldHookCallback,
 } from '../types';
 import { generateToken, verifyToken } from '../utils';
@@ -125,12 +126,15 @@ export interface App extends BaseModelInterface {
     ...DISABLE_REST_ACTIONS,
     update: {
       rest: null,
+      types: [EndpointType.SUPER_ADMIN],
     },
     remove: {
       rest: null,
+      types: [EndpointType.SUPER_ADMIN],
     },
     create: {
       rest: null,
+      types: [EndpointType.SUPER_ADMIN],
     },
   },
 
@@ -138,7 +142,20 @@ export interface App extends BaseModelInterface {
     after: {
       create: [
         async function (ctx: Context, data: any) {
+          await this.broker.cacher?.clean('auth.redirectAllowedOrigins');
           return await ctx.call('apps.regenerateApiKey', { id: data.id });
+        },
+      ],
+      update: [
+        async function (_ctx: Context, data: any) {
+          await this.broker.cacher?.clean('auth.redirectAllowedOrigins');
+          return data;
+        },
+      ],
+      remove: [
+        async function (_ctx: Context, data: any) {
+          await this.broker.cacher?.clean('auth.redirectAllowedOrigins');
+          return data;
         },
       ],
     },
@@ -150,6 +167,7 @@ export interface App extends BaseModelInterface {
 export default class AppsService extends moleculer.Service {
   @Action({
     rest: 'POST /:id/generate',
+    types: [EndpointType.SUPER_ADMIN],
     params: {
       id: {
         type: 'number',

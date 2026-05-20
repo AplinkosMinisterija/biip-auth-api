@@ -79,7 +79,10 @@ export default class InheritedGroupAppsService extends moleculer.Service {
   })
   async getGroupIdsByApp(ctx: Context<{ groups?: number[]; app: number }>) {
     const query: any = {
-      $raw: `inherited_apps_ids @> ANY (ARRAY ['${ctx.params.app}']::jsonb[])`,
+      $raw: {
+        condition: `inherited_apps_ids @> ?::jsonb`,
+        bindings: [JSON.stringify([Number(ctx.params.app)])],
+      },
     };
 
     if (ctx.params.groups?.length) {
