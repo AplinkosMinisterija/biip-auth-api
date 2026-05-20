@@ -253,8 +253,17 @@ export default class UsersLocalService extends moleculer.Service {
       throwNoTokenError();
     }
 
-    if (meta.user?.type === UserType.USER) {
-      ctx.params.apps = [appId];
+    // Anonymous self-invite (canInviteSelf=true) and regular USER invites
+    // are both restricted to the calling app — they cannot grant the new
+    // user access to other apps or pre-assign them into arbitrary groups.
+    // Without this, an attacker could spam-create accounts already inside
+    // any group of any app whose API key they hold.
+    const isTrustedInternal = !!meta?.hasPermissions;
+    if (!isTrustedInternal && (!meta.user?.id || meta.user?.type === UserType.USER)) {
+      ctx.params.apps = appId ? [appId] : [];
+      if (!meta.user?.id) {
+        ctx.params.groups = undefined;
+      }
     }
 
     const { email, groups, password, apps, unassignExistingGroups } = ctx.params;

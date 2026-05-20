@@ -461,6 +461,10 @@ export default class AuthService extends moleculer.Service {
   // (phishing dressed up as a trusted gov.lt redirect). The allow-list is
   // the set of registered `apps.url` values — same authority that issues
   // API keys, so adding to it already requires SUPER_ADMIN.
+  //
+  // Path-aware: when the registered app.url includes a pathname, the target
+  // must live under it. Stops chaining through any redirect endpoint that a
+  // trusted app might host at an unrelated path.
   @Method
   async isAllowedRedirectTarget(target: string): Promise<boolean> {
     if (!target || typeof target !== 'string') return false;
@@ -474,16 +478,42 @@ export default class AuthService extends moleculer.Service {
       return false;
     }
 
-    const apps: App[] = await this.broker.call('apps.find', {});
-    return apps.some((app) => {
-      if (!app?.url) return false;
-      try {
-        const allowed = new URL(app.url);
-        return allowed.protocol === targetUrl.protocol && allowed.host === targetUrl.host;
-      } catch {
-        return false;
-      }
+    const allowedOrigins = await this.getAllowedRedirectOrigins();
+    return allowedOrigins.some((allowed) => {
+      if (allowed.protocol !== targetUrl.protocol) return false;
+      if (allowed.host !== targetUrl.host) return false;
+      const allowedPath = allowed.pathname === '/' ? '' : allowed.pathname.replace(/\/+$/, '');
+      if (!allowedPath) return true;
+      const targetPath = targetUrl.pathname.replace(/\/+$/, '');
+      return targetPath === allowedPath || targetPath.startsWith(allowedPath + '/');
     });
+  }
+
+  // Cached parse of `apps[].url` into URL objects. `redirectEvartai` is an
+  // unauthenticated public endpoint, so we cannot scan the full apps table
+  // on every call. 60s TTL — apps don't change often, and adding/rotating
+  // an app already requires SUPER_ADMIN.
+  @Method
+  async getAllowedRedirectOrigins(): Promise<URL[]> {
+    const cacheKey = 'auth.redirectAllowedOrigins';
+    const cached = (await this.broker.cacher?.get(cacheKey)) as string[] | null;
+    let urls: string[];
+    if (cached) {
+      urls = cached;
+    } else {
+      const apps: App[] = await this.broker.call('apps.find', { fields: ['url'] });
+      urls = apps.map((a) => a?.url).filter((u): u is string => !!u);
+      await this.broker.cacher?.set(cacheKey, urls, 60);
+    }
+    return urls
+      .map((u) => {
+        try {
+          return new URL(u);
+        } catch {
+          return null;
+        }
+      })
+      .filter((u): u is URL => u !== null);
   }
 
   @Method
