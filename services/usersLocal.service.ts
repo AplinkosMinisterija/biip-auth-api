@@ -629,7 +629,27 @@ export default class UsersLocalService extends moleculer.Service {
     const { user } = ctx.meta;
     const { type, groups, apps, id } = ctx.params;
 
-    if (!user?.id) return ctx;
+    if (!user?.id) {
+      // Unauthenticated invite path — reached when the calling app has
+      // `settings.canInviteSelf=true`, OR when a trusted internal caller
+      // sets `meta.hasPermissions=true` (e.g. `seed.real` bootstrapping
+      // the initial super admin via broker.call, not via the API gateway).
+      //
+      // Without this guard, the early-return below skips all type/group/app
+      // validation and an anonymous HTTP caller can set `type=SUPER_ADMIN`,
+      // yielding a privilege escalation on receipt of the password-reset
+      // email (which is also returned in the API response when
+      // `emailCanBeSent()` is false — i.e. in dev/test environments).
+      //
+      // `meta.hasPermissions` cannot be set from an HTTP request because
+      // the API gateway constructs `ctx.meta` from authenticate/authorize
+      // outputs only (no `mergeMeta`), so honouring it here is safe.
+      const trustedInternal = !!(ctx.meta as any)?.hasPermissions;
+      if (!trustedInternal && type && type !== UserType.USER) {
+        throwUnauthorizedError('Self-invite is restricted to USER type.');
+      }
+      return ctx;
+    }
 
     const isUserSuperAdmin = user.type === UserType.SUPER_ADMIN;
     const isUserAdmin = user.type === UserType.ADMIN;
