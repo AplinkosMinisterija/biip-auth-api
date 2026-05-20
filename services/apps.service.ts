@@ -126,12 +126,15 @@ export interface App extends BaseModelInterface {
     ...DISABLE_REST_ACTIONS,
     update: {
       rest: null,
+      types: [EndpointType.SUPER_ADMIN],
     },
     remove: {
       rest: null,
+      types: [EndpointType.SUPER_ADMIN],
     },
     create: {
       rest: null,
+      types: [EndpointType.SUPER_ADMIN],
     },
   },
 

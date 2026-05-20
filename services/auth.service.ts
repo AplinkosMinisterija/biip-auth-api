@@ -340,8 +340,11 @@ export default class AuthService extends moleculer.Service {
     } catch (err) {}
 
     let url: string;
-    if (customData?.host) url = `${customData.host}/evartai`;
-    else if (customData?.url) url = customData.url;
+    if (customData?.host && (await this.isAllowedRedirectTarget(customData.host))) {
+      url = `${customData.host}/evartai`;
+    } else if (customData?.url && (await this.isAllowedRedirectTarget(customData.url))) {
+      url = customData.url;
+    }
 
     if (url) {
       ctx.meta.$location = `${url}?${searchParams.toString()}`;
@@ -450,6 +453,37 @@ export default class AuthService extends moleculer.Service {
     return users.filter((i) =>
       i.inheritedApps?.map((i) => i.id).includes(Number(ctx.meta?.app?.id)),
     );
+  }
+
+  // Open-redirect guard for `redirectEvartai`. We accept a caller-supplied
+  // `host` / `url` and 302 the browser there with the evartai ticket in the
+  // query string. Without validation, this would 302 to any attacker domain
+  // (phishing dressed up as a trusted gov.lt redirect). The allow-list is
+  // the set of registered `apps.url` values — same authority that issues
+  // API keys, so adding to it already requires SUPER_ADMIN.
+  @Method
+  async isAllowedRedirectTarget(target: string): Promise<boolean> {
+    if (!target || typeof target !== 'string') return false;
+    let targetUrl: URL;
+    try {
+      targetUrl = new URL(target);
+    } catch {
+      return false;
+    }
+    if (targetUrl.protocol !== 'http:' && targetUrl.protocol !== 'https:') {
+      return false;
+    }
+
+    const apps: App[] = await this.broker.call('apps.find', {});
+    return apps.some((app) => {
+      if (!app?.url) return false;
+      try {
+        const allowed = new URL(app.url);
+        return allowed.protocol === targetUrl.protocol && allowed.host === targetUrl.host;
+      } catch {
+        return false;
+      }
+    });
   }
 
   @Method
