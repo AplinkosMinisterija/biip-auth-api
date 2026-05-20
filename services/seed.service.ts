@@ -11,10 +11,22 @@ import { AppType } from './apps.service';
 export default class SeedService extends moleculer.Service {
   @Action()
   async real(ctx: Context<Record<string, unknown>>) {
-    const adminEmail = process.env.DEFAULT_SUPER_ADMIN_EMAIL || 'superadmin@am.lt';
-    const adminPassword = process.env.DEFAULT_SUPER_ADMIN_PASSWORD || 'Slaptazodis1@';
+    const adminEmail = process.env.DEFAULT_SUPER_ADMIN_EMAIL;
+    const adminPassword = process.env.DEFAULT_SUPER_ADMIN_PASSWORD;
     const adminAppUrl = process.env.DEFAULT_ADMIN_APP_URL || 'https://admin.biip.lt';
     const projectNameGenitive = process.env.DEFAULT_PROJECT_NAME_GENITIVE || 'BĮIP';
+
+    if (!adminEmail || !adminPassword) {
+      // Bootstrap the first super admin from env, never from a hardcoded
+      // default. The previous fallback ('superadmin@am.lt' / 'Slaptazodis1@')
+      // was a known credential pair — anyone scanning a fresh deploy where
+      // the env vars hadn't been set could log in as super admin.
+      throw new moleculer.Errors.MoleculerServerError(
+        'DEFAULT_SUPER_ADMIN_EMAIL and DEFAULT_SUPER_ADMIN_PASSWORD must be set before seeding.',
+        500,
+        'SEED_CONFIG_MISSING',
+      );
+    }
     const adminAppExists = await ctx.call('apps.count', { query: { type: AppType.ADMIN } });
     const usersAppExists = await ctx.call('apps.count', { query: { type: AppType.USERS } });
     const userExists = await ctx.call('users.count', { query: { email: adminEmail } });
