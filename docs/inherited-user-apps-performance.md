@@ -136,11 +136,56 @@ fix. (medziokle-api now also caches resolved tokens 30s on its side — branch
 `feat/auth-token-cache` — which cuts the herd's amplitude but not auth-api's
 per-miss cost.)
 
+### Option D — Mixin-level client cache (fleet-wide mitigation)
+
+`users.resolveToken` is defined once in the shared **`biip-auth-nodejs`** mixin
+(`mixin/index.js:40`), which every biip API consumes (medziokle, zvejyba, rusys,
+uetk, gyvunai, hidro, zuvinimas, …). Adding Moleculer's built-in action cache
+there means **every consuming API gets it for free** on a version bump — the DRY
+version of medziokle-api's `feat/auth-token-cache`.
+
+```js
+'users.resolveToken': {
+  cache: { keys: ['#authToken'], ttl: 30 }, // '#' = meta key — MANDATORY
+  handler: (ctx) => authModule.setToken(ctx.meta.authToken).users.me(),
+}
+```
+
+**Footgun (critical):** `resolveToken` reads the token from `ctx.meta.authToken`,
+**not** `ctx.params`. Moleculer's default cache key is built from `params`, which
+is empty here — so a naive `cache: { ttl: 30 }` would collide **every user onto
+one cache entry** and hand out the wrong identity. The `keys: ['#authToken']`
+meta-key form is required, not optional. Moleculer hashes the long token in the
+key automatically and never caches thrown (invalid-token) results.
+
+Caveats:
+- **`biip-auth-nodejs` is `github.com/DadPatch/biip-auth-nodejs`, not in the AM
+  org** — a third-party/fork package (same blocker family as the stack-
+  modernization "Train B"). Changing it needs access to that repo, a new
+  published version, and a bump in every consuming API. Bigger blast radius and
+  a non-AM dependency on the hot path.
+- Each consuming API must have a **Redis cacher** configured or the `cache:`
+  block is a silent no-op.
+- Same 30s staleness trade-off, now fleet-wide — a conscious security decision.
+- If adopted, the per-repo `feat/auth-token-cache` (medziokle-api) becomes
+  redundant (double caching) and should be superseded.
+
+**Mitigation, not a fix:** like Option C, it lowers the herd's amplitude but
+auth-api still recomputes the whole view on each miss.
+
 ## Recommendation
 
 **Option A.** Output parity is free; the only new work is refresh wiring, which
 is well understood. Pair the matview migration with the refresh mechanism in the
 same change set.
+
+If the goal is "one change, every project benefits", Option A is also the
+cleaner single point than Option D: the matview is **one change in auth-api**
+(the single source) and needs no per-client release, whereas the mixin cache
+means touching a shared (non-AM) library plus a bump + staging soak in every
+consuming API. Options C/D are useful **bridges** to run until the matview lands
+(medziokle's `feat/auth-token-cache` already plays this role); they are not a
+substitute for it.
 
 ## Pre-deploy checklist (auth-api is shared by ALL biip apps — treat as such)
 
