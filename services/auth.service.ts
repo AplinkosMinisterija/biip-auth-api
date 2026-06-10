@@ -47,12 +47,25 @@ export default class AuthService extends moleculer.Service {
       AppAuthMeta
     >,
   ) {
-    const { email, password, refresh } = ctx.params;
+    const { password, refresh } = ctx.params;
+    const email = ctx.params.email.toLowerCase();
 
-    const { userId: strategyId, id }: any = await ctx.call('usersLocal.validateLogin', {
-      email: email.toLowerCase(),
-      password,
-    });
+    await this.assertLoginNotRateLimited(email);
+
+    let strategyId: number;
+    let id: number;
+    try {
+      const validated: any = await ctx.call('usersLocal.validateLogin', {
+        email,
+        password,
+      });
+      strategyId = validated.userId;
+      id = validated.id;
+    } catch (err) {
+      await this.registerFailedLogin(email);
+      throw err;
+    }
+    await this.clearFailedLogins(email);
 
     const user = await this.getValidatedUser(id, ctx.meta.app);
 
@@ -305,10 +318,11 @@ export default class AuthService extends moleculer.Service {
   })
   async logout(ctx: Context<{}, AppAuthMeta & UserAuthMeta>) {
     const { authToken: token } = ctx.meta;
-    const valid = await ctx.call('auth.parseToken', { token }, { meta: ctx.meta });
-    if (!valid) return { success: false };
+    // parseToken returns `{}` (truthy) for an invalid/expired token, so guard on
+    // the decoded id. Never log the raw bearer token.
+    const valid: any = await ctx.call('auth.parseToken', { token }, { meta: ctx.meta });
+    if (!valid?.id) return { success: false };
 
-    console.log('user logout', token);
     return { success: true };
   }
 
@@ -465,6 +479,18 @@ export default class AuthService extends moleculer.Service {
   // Path-aware: when the registered app.url includes a pathname, the target
   // must live under it. Stops chaining through any redirect endpoint that a
   // trusted app might host at an unrelated path.
+  // Broker-only (no `rest`, so not HTTP-exposed) wrapper around the redirect
+  // allow-list so sibling services (e.g. usersEvartai.sign) can validate a
+  // caller-supplied host without duplicating the apps-allow-list logic.
+  @Action({
+    params: {
+      target: 'string',
+    },
+  })
+  async isRedirectAllowed(ctx: Context<{ target: string }>) {
+    return this.isAllowedRedirectTarget(ctx.params.target);
+  }
+
   @Method
   async isAllowedRedirectTarget(target: string): Promise<boolean> {
     if (!target || typeof target !== 'string') return false;
@@ -555,6 +581,59 @@ export default class AuthService extends moleculer.Service {
           error: e?.message,
         }),
       );
+  }
+
+  // ---- Login brute-force throttle ----------------------------------------
+  // Keyed per email; counts only failed password attempts within a rolling
+  // window and clears on success. `remindPassword` already self-throttles per
+  // user, so only the password-login path needs this. Backed by the Redis
+  // cacher (no-op if the cacher is absent).
+
+  @Method
+  loginAttemptsKey(email: string) {
+    return `auth.loginAttempts:${email}`;
+  }
+
+  @Method
+  loginRateLimitEnabled() {
+    // Enabled in real environments; off in the test env unless explicitly turned
+    // on, so accumulated attempts don't perturb the existing suite.
+    if (process.env.NODE_ENV === 'test') return process.env.ENABLE_LOGIN_RATE_LIMIT === 'true';
+    return true;
+  }
+
+  @Method
+  async assertLoginNotRateLimited(email: string) {
+    if (!this.loginRateLimitEnabled()) return;
+    const cacher = this.broker.cacher;
+    if (!cacher) return;
+    const data: any = await cacher.get(this.loginAttemptsKey(email));
+    const max = Number(process.env.LOGIN_MAX_ATTEMPTS) || 10;
+    if (data?.count >= max) {
+      throw new moleculer.Errors.MoleculerClientError(
+        'Too many failed login attempts. Try again later.',
+        429,
+        'TOO_MANY_ATTEMPTS',
+      );
+    }
+  }
+
+  @Method
+  async registerFailedLogin(email: string) {
+    if (!this.loginRateLimitEnabled()) return;
+    const cacher = this.broker.cacher;
+    if (!cacher) return;
+    const key = this.loginAttemptsKey(email);
+    const windowSec = Number(process.env.LOGIN_ATTEMPTS_WINDOW) || 300;
+    const data: any = (await cacher.get(key)) || { count: 0 };
+    data.count = (data.count || 0) + 1;
+    await cacher.set(key, data, windowSec);
+  }
+
+  @Method
+  async clearFailedLogins(email: string) {
+    if (!this.loginRateLimitEnabled()) return;
+    await this.broker.cacher?.del(this.loginAttemptsKey(email));
   }
 
   @Method
