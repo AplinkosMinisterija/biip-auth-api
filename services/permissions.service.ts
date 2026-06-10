@@ -133,8 +133,31 @@ interface PermissionType {
 
   actions: {
     ...DISABLE_REST_ACTIONS,
+    // The @moleculer/database mixin exposes get/list/create/update/remove over
+    // REST by default. Permissions are the authorization source of truth, so the
+    // raw CRUD surface must NOT be reachable by ordinary users: an authenticated
+    // USER could otherwise `PATCH /api/permissions/:id {accesses:["*"]}` to grant
+    // themselves anything (privilege escalation), or enumerate every permission
+    // via `GET /api/permissions`. Mutations go through the explicit, ADMIN-typed
+    // `findOrCreate` / `modifyAccessForGroup` actions instead; internal broker
+    // calls (e.g. from findUsersByAccess) keep working because `rest: null` only
+    // drops the HTTP alias, not the action.
     create: {
       rest: null,
+    },
+    update: {
+      rest: null,
+      types: [EndpointType.SUPER_ADMIN],
+    },
+    remove: {
+      rest: null,
+      types: [EndpointType.SUPER_ADMIN],
+    },
+    get: {
+      types: [EndpointType.ADMIN, EndpointType.SUPER_ADMIN],
+    },
+    list: {
+      types: [EndpointType.ADMIN, EndpointType.SUPER_ADMIN],
     },
   },
 
@@ -199,20 +222,33 @@ export default class PermissionsService extends moleculer.Service {
       },
     },
   })
-  async findUsersByAccess(ctx: Context<{ access: string; municipality: number }>) {
+  async findUsersByAccess(
+    ctx: Context<{ access: string; municipality: number }, AppAuthMeta>,
+  ) {
     const { access, municipality } = ctx.params;
+    const app = ctx.meta.app;
+
+    const query: GenericObject = {
+      accesses: {
+        $exists: true,
+      },
+      $raw: {
+        condition: `"accesses" @> ?::jsonb`,
+        bindings: [JSON.stringify([access])],
+      },
+    };
+
+    // PII guard: this endpoint is API-key only (no user). Scope the lookup to the
+    // calling app so one app's key cannot enumerate users (email/name) across the
+    // whole BIIP estate. ADMIN-type apps legitimately span apps, so they keep the
+    // cross-app view.
+    if (app && app.type !== AppType.ADMIN) {
+      query.app = app.id;
+    }
 
     const parentCtx: any = {};
     const permissions: Array<Permission> = await ctx.call('permissions.find', {
-      query: {
-        accesses: {
-          $exists: true,
-        },
-        $raw: {
-          condition: `"accesses" @> ?::jsonb`,
-          bindings: [JSON.stringify([access])],
-        },
-      },
+      query,
     });
 
     let userList: Array<any> = await Promise.all(
