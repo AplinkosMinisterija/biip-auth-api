@@ -566,12 +566,15 @@ export default class UsersLocalService extends moleculer.Service {
 
   @Method
   encryptPassword(password: string) {
-    return bcrypt.hashSync(password, 10);
+    // cost 12: stronger work factor for a central gov IdP. Existing cost-10
+    // hashes still verify (bcrypt encodes the cost in the hash).
+    return bcrypt.hashSync(password, 12);
   }
 
   @Method
-  isPasswordValid(hashedPassword: string, password: string) {
-    return bcrypt.compare(hashedPassword, password);
+  isPasswordValid(plainPassword: string, hashedPassword: string) {
+    // bcrypt.compare(data, encrypted) — plaintext first, stored hash second.
+    return bcrypt.compare(plainPassword, hashedPassword);
   }
 
   @Method
