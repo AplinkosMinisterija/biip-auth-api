@@ -31,14 +31,14 @@ export function decodeString(text: string) {
   return strQueryToObject(atob(text));
 }
 
-export function generateSignature(query: string) {
-  const queryBase64 = btoa(query);
-
-  const signature = crypto
-    .createHmac('sha256', process.env.JWT_SECRET)
-    .update(queryBase64)
-    .digest('base64');
+function signQuery(query: string, secret: string) {
+  const signature = crypto.createHmac('sha256', secret).update(btoa(query)).digest('base64');
   return signature.replace(/\+|\//g, '-').replace(/=+$/, '');
+}
+
+export function generateSignature(query: string) {
+  // always sign new links with the current secret
+  return signQuery(query, process.env.JWT_SECRET);
 }
 
 export function validateHashAndSignature(hash?: string, signature?: string) {
@@ -47,7 +47,13 @@ export function validateHashAndSignature(hash?: string, signature?: string) {
   signature = decodeURIComponent(signature);
   const query = atob(hash); // decode
 
-  if (signature !== generateSignature(query)) return {};
+  // Accept the current secret and, during a rotation grace window, the previous
+  // one — so invitation / password-reset links issued before the rotation stay
+  // valid until they would normally expire.
+  const accepted = [process.env.JWT_SECRET, process.env.JWT_SECRET_PREVIOUS]
+    .filter((secret): secret is string => !!secret)
+    .some((secret) => signature === signQuery(query, secret));
+  if (!accepted) return {};
 
   return strQueryToObject(query);
 }
