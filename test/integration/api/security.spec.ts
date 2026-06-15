@@ -1,7 +1,7 @@
 'use strict';
 import { ServiceBroker } from 'moleculer';
 import { ApiHelper, serviceBrokerConfig } from '../../helpers/api';
-import { expect, describe, beforeAll, afterAll, it } from '@jest/globals';
+import { expect, describe, beforeAll, afterAll, it, jest } from '@jest/globals';
 
 const request = require('supertest');
 
@@ -133,6 +133,7 @@ describe('Security hardening', () => {
     afterAll(async () => {
       delete process.env.ENABLE_LOGIN_RATE_LIMIT;
       await broker.cacher?.del?.('auth.loginAttempts:bruteforce.target@am.lt');
+      await broker.cacher?.del?.('auth.loginAttempts:user.fisher@am.lt');
     });
 
     it('blocks after too many failed attempts', async () => {
@@ -151,6 +152,105 @@ describe('Security hardening', () => {
         expect(res.status).toEqual(429);
         expect(res.body.type).toEqual('TOO_MANY_ATTEMPTS');
       });
+    });
+
+    it('clears the failed-attempt counter on a successful login', async () => {
+      const email = apiHelper.emailFisher;
+      const key = `auth.loginAttempts:${email.toLowerCase()}`;
+      const fail = () =>
+        request(apiService.server)
+          .post('/auth/login')
+          .set(apiHelper.getHeaders(null, apiHelper.appFishing.apiKey))
+          .send({ email, password: 'WrongPassword1@' });
+
+      for (let i = 0; i < 3; i++) await fail().expect(400);
+      expect((await broker.cacher?.get(key))?.count).toBeGreaterThan(0);
+
+      // A successful login must reset the counter so a legit user is never locked
+      // out by their own earlier typos.
+      await request(apiService.server)
+        .post('/auth/login')
+        .set(apiHelper.getHeaders(null, apiHelper.appFishing.apiKey))
+        .send({ email, password: apiHelper.goodPassword })
+        .expect(200);
+
+      expect(await broker.cacher?.get(key)).toBeFalsy();
+    });
+  });
+
+  // mappingPolicy:'all' on the /api route means an action with no REST alias is
+  // still reachable by name (POST /api/<service>/<action>). rest:null does NOT
+  // protect it — only a `types` gate does. These assert the raw mutating actions
+  // reject a non-privileged caller via that direct-mapping path.
+  describe('raw action surface is type-gated (mappingPolicy bypass)', () => {
+    // Use adminToken (a real UserType.ADMIN) — these actions are SUPER_ADMIN-only,
+    // so blocking an ADMIN proves the gate, not just the absence of privilege.
+    it('an ADMIN cannot self-grant via POST /api/permissions/create', () => {
+      return request(apiService.server)
+        .post('/api/permissions/create')
+        .set(apiHelper.getHeaders(apiHelper.adminToken, apiHelper.appFishing.apiKey))
+        .send({ group: apiHelper.groupFishersCompany.id, accesses: ['*'], role: 'ADMIN' })
+        .expect((res: any) => {
+          expect([401, 403]).toContain(res.status);
+        });
+    });
+
+    it('an ADMIN cannot create a user via POST /api/users/create', () => {
+      return request(apiService.server)
+        .post('/api/users/create')
+        .set(apiHelper.getHeaders(apiHelper.adminToken, apiHelper.appFishing.apiKey))
+        .send({ firstName: 'X', lastName: 'Y', email: 'bypass.create@am.lt' })
+        .expect((res: any) => {
+          expect([401, 403]).toContain(res.status);
+        });
+    });
+
+    it('an ADMIN cannot grant group membership via POST /api/users/assignGroups', () => {
+      return request(apiService.server)
+        .post('/api/users/assignGroups')
+        .set(apiHelper.getHeaders(apiHelper.adminToken, apiHelper.appFishing.apiKey))
+        .send({ id: 1, groups: [{ id: apiHelper.groupFishersCompany.id, role: 'ADMIN' }] })
+        .expect((res: any) => {
+          expect([401, 403]).toContain(res.status);
+        });
+    });
+
+    it('a regular user cannot delete a group via DELETE /api/groups/:id', () => {
+      return request(apiService.server)
+        .delete('/api/groups/999999')
+        .set(apiHelper.getHeaders(apiHelper.fisherUserToken, apiHelper.appFishing.apiKey))
+        .expect((res: any) => {
+          expect([401, 403]).toContain(res.status);
+        });
+    });
+  });
+
+  // eVartai `sign` must only accept a host whose ORIGIN is a registered app URL,
+  // so an attacker host can't receive the auth ticket (account takeover).
+  describe('evartai sign host validation', () => {
+    // Restore after each test so the global.fetch stub from the accept case can
+    // never leak into a later suite.
+    afterEach(() => jest.restoreAllMocks());
+
+    it('rejects a host that is not a registered app origin', () => {
+      return request(apiService.server)
+        .post('/auth/evartai/sign')
+        .set(apiHelper.getHeaders(null, apiHelper.appFishing.apiKey))
+        .send({ host: 'https://attacker.example.com' })
+        .expect((res: any) => {
+          expect(res.status).toEqual(400);
+          expect(res.body.message).toEqual('Invalid host');
+        });
+    });
+
+    it('accepts a registered app origin', () => {
+      apiHelper.interceptFetch({ ticket: 'mock-ticket', url: 'https://evartai.example/auth' });
+      const host = new URL(apiHelper.appFishing.url).origin;
+      return request(apiService.server)
+        .post('/auth/evartai/sign')
+        .set(apiHelper.getHeaders(null, apiHelper.appFishing.apiKey))
+        .send({ host })
+        .expect(200);
     });
   });
 });

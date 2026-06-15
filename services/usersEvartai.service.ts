@@ -224,8 +224,10 @@ export default class UsersEvartaiService extends moleculer.Service {
   async sign(ctx: Context<{ host: string }, AppAuthMeta>) {
     // `host` is where eVartai sends the user back (with the auth ticket in the
     // URL). An unvalidated host means the ticket can be delivered to an attacker
-    // domain → account takeover. Restrict to the registered-app redirect
-    // allow-list (same guard `redirectEvartai` uses for the final 302).
+    // domain → account takeover. Restrict to the registered-app allow-list at
+    // ORIGIN level (protocol+host) via auth.isRedirectAllowed — origin
+    // confinement closes off-domain delivery while tolerating app URLs that carry
+    // a path. (redirectEvartai keeps the stricter path-aware check on its 302.)
     const allowed: boolean = await ctx.call('auth.isRedirectAllowed', {
       target: ctx.params.host,
     });

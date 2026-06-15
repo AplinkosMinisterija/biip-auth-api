@@ -479,16 +479,42 @@ export default class AuthService extends moleculer.Service {
   // Path-aware: when the registered app.url includes a pathname, the target
   // must live under it. Stops chaining through any redirect endpoint that a
   // trusted app might host at an unrelated path.
-  // Broker-only (no `rest`, so not HTTP-exposed) wrapper around the redirect
-  // allow-list so sibling services (e.g. usersEvartai.sign) can validate a
-  // caller-supplied host without duplicating the apps-allow-list logic.
+  // Broker-only wrapper used by usersEvartai.sign to validate the caller-supplied
+  // host. Matches at ORIGIN level (protocol+host) only: `sign` just forwards
+  // `host` to eVartai to build the return URL, so origin confinement already
+  // closes the off-domain ticket-delivery (account-takeover) vector, while
+  // tolerating registered app URLs that carry a path (e.g.
+  // https://gyvunai.biip.lt/app) which a strict path-prefix match would reject.
+  // The strict path-aware check (isAllowedRedirectTarget) stays on
+  // redirectEvartai's actual 302. `visibility: 'protected'` keeps this off the
+  // HTTP gateway — under mappingPolicy:'all' it would otherwise be reachable as
+  // `POST /api/auth/isRedirectAllowed`, i.e. an allow-list oracle.
   @Action({
+    visibility: 'protected',
     params: {
       target: 'string',
     },
   })
   async isRedirectAllowed(ctx: Context<{ target: string }>) {
-    return this.isAllowedRedirectTarget(ctx.params.target);
+    return this.isAllowedRedirectOrigin(ctx.params.target);
+  }
+
+  @Method
+  async isAllowedRedirectOrigin(target: string): Promise<boolean> {
+    if (!target || typeof target !== 'string') return false;
+    let targetUrl: URL;
+    try {
+      targetUrl = new URL(target);
+    } catch {
+      return false;
+    }
+    if (targetUrl.protocol !== 'http:' && targetUrl.protocol !== 'https:') {
+      return false;
+    }
+    const allowedOrigins = await this.getAllowedRedirectOrigins();
+    return allowedOrigins.some(
+      (allowed) => allowed.protocol === targetUrl.protocol && allowed.host === targetUrl.host,
+    );
   }
 
   @Method
@@ -607,7 +633,17 @@ export default class AuthService extends moleculer.Service {
     if (!this.loginRateLimitEnabled()) return;
     const cacher = this.broker.cacher;
     if (!cacher) return;
-    const data: any = await cacher.get(this.loginAttemptsKey(email));
+    let data: any;
+    try {
+      data = await cacher.get(this.loginAttemptsKey(email));
+    } catch (err) {
+      // Fail OPEN: a cacher/Redis outage must not take down login. Skip the
+      // throttle for this request rather than 500 every authentication.
+      this.logger.warn('Login throttle read failed; allowing login', err);
+      return;
+    }
+    // NB: the 429 throw stays OUTSIDE the try/catch above — a genuine rate-limit
+    // block must propagate, not be swallowed as a cacher error.
     const max = Number(process.env.LOGIN_MAX_ATTEMPTS) || 10;
     if (data?.count >= max) {
       throw new moleculer.Errors.MoleculerClientError(
@@ -625,15 +661,26 @@ export default class AuthService extends moleculer.Service {
     if (!cacher) return;
     const key = this.loginAttemptsKey(email);
     const windowSec = Number(process.env.LOGIN_ATTEMPTS_WINDOW) || 300;
-    const data: any = (await cacher.get(key)) || { count: 0 };
-    data.count = (data.count || 0) + 1;
-    await cacher.set(key, data, windowSec);
+    try {
+      const data: any = (await cacher.get(key)) || { count: 0 };
+      data.count = (data.count || 0) + 1;
+      await cacher.set(key, data, windowSec);
+    } catch (err) {
+      // Fail OPEN: throttle bookkeeping must never mask the real login error.
+      this.logger.warn('Login throttle write failed', err);
+    }
   }
 
   @Method
   async clearFailedLogins(email: string) {
     if (!this.loginRateLimitEnabled()) return;
-    await this.broker.cacher?.del(this.loginAttemptsKey(email));
+    try {
+      await this.broker.cacher?.del(this.loginAttemptsKey(email));
+    } catch (err) {
+      // Fail OPEN: a failed counter-clear must not turn a successful login (auth
+      // already passed) into a 500.
+      this.logger.warn('Login throttle clear failed', err);
+    }
   }
 
   @Method
