@@ -11,6 +11,7 @@ import {
   COMMON_DEFAULT_SCOPES,
   COMMON_FIELDS,
   COMMON_SCOPES,
+  EndpointType,
   FieldHookCallback,
   throwBadRequestError,
   throwNotFoundError,
@@ -525,6 +526,13 @@ export default class UsersEvartaiService extends moleculer.Service {
   }
 
   @Action({
+    // Internal-only: the real HTTP delete goes through `users.removeUser`
+    // (validateIfAuthorized hook). This action is reachable by name under the
+    // gateway's `mappingPolicy: 'all'` (`POST /api/usersEvartai/removeUser`), and
+    // it has no before-hook, so without a type gate any authenticated USER could
+    // revoke an arbitrary user's app access. SUPER_ADMIN-gate it; internal broker
+    // callers bypass authorize().
+    types: [EndpointType.SUPER_ADMIN],
     params: {
       id: {
         type: 'number',

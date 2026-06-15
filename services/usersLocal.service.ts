@@ -530,6 +530,14 @@ export default class UsersLocalService extends moleculer.Service {
   }
 
   @Action({
+    // Internal-only: the real HTTP delete goes through `users.removeUser`
+    // (validateIfAuthorized hook), which delegates here via an internal call.
+    // This action is reachable by name under the gateway's `mappingPolicy: 'all'`
+    // (`POST /api/usersLocal/removeUser`) and has no before-hook, so without a
+    // type gate any authenticated USER could delete an arbitrary user (the inner
+    // `users.remove` call bypasses its own gateway gate). SUPER_ADMIN-gate it;
+    // internal broker callers bypass authorize().
+    types: [EndpointType.SUPER_ADMIN],
     params: {
       id: {
         type: 'number',

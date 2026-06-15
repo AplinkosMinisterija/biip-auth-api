@@ -223,6 +223,33 @@ describe('Security hardening', () => {
           expect([401, 403]).toContain(res.status);
         });
     });
+
+    // The user-deletion analog of the groups.removeGroup gate above. The real
+    // HTTP delete is `users.removeUser` (validateIfAuthorized hook); these inner
+    // sub-service actions are internal-only but reachable by name via the same
+    // mappingPolicy:'all' direct-mapping, with no before-hook. Use adminToken (a
+    // real ADMIN) — they are SUPER_ADMIN-gated, so blocking an ADMIN proves the
+    // gate. A non-existent id keeps the assertion non-destructive: gate present →
+    // 401/403; gate removed → the action would run and 404 (still fails here).
+    it('an ADMIN cannot delete a user via POST /api/usersLocal/removeUser', () => {
+      return request(apiService.server)
+        .post('/api/usersLocal/removeUser')
+        .set(apiHelper.getHeaders(apiHelper.adminToken, apiHelper.appFishing.apiKey))
+        .send({ id: 999999 })
+        .expect((res: any) => {
+          expect([401, 403]).toContain(res.status);
+        });
+    });
+
+    it('an ADMIN cannot revoke app access via POST /api/usersEvartai/removeUser', () => {
+      return request(apiService.server)
+        .post('/api/usersEvartai/removeUser')
+        .set(apiHelper.getHeaders(apiHelper.adminToken, apiHelper.appFishing.apiKey))
+        .send({ id: 999999 })
+        .expect((res: any) => {
+          expect([401, 403]).toContain(res.status);
+        });
+    });
   });
 
   // eVartai `sign` must only accept a host whose ORIGIN is a registered app URL,
