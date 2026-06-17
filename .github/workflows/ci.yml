@@ -40,12 +40,15 @@ jobs:
 
   validate:
     name: Validate node application
-    runs-on: ubuntu-latest
+    runs-on: am-github-runner
+    # ARC (Kubernetes) runner: the job runs inside a container and reaches
+    # service containers by service name on their native port (postgres:5432,
+    # redis:6379) — not localhost:<mapped-port> like a GitHub-hosted runner.
+    container: node:18
 
     services:
       postgres:
         image: postgis/postgis:14-master
-        ports: ['5436:5432']
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -60,7 +63,6 @@ jobs:
 
       redis:
         image: redis:7
-        ports: ['6671:6379']
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 2s
@@ -71,12 +73,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Set up Node
-        uses: actions/setup-node@v3
-        with:
-          node-version-file: package.json
-          cache: yarn
-
       - name: Install dependencies
         run: yarn install --immutable --immutable-cache --check-cache
 
@@ -86,12 +82,12 @@ jobs:
       - name: Test
         run: yarn test
         env:
-          DB_CONNECTION: postgresql://postgres:postgres@localhost:5436/auth
-          REDIS_CONNECTION: redis://localhost:6671
+          DB_CONNECTION: postgresql://postgres:postgres@postgres:5432/auth
+          REDIS_CONNECTION: redis://redis:6379
 
   validate-docker-build:
     name: Validate if docker image builds
-    runs-on: ubuntu-latest
+    runs-on: am-github-runner
     timeout-minutes: 10
     permissions:
       contents: read
