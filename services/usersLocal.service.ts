@@ -637,10 +637,20 @@ export default class UsersLocalService extends moleculer.Service {
   // After a password change, drop the cached `auth.parseToken` results so the
   // `passwordMustChange` flag (computed there, cached 1h) refreshes on the next
   // request — otherwise the user stays locked for up to the cache TTL.
+  //
+  // Only an admin's password change can flip that flag, so the (global) flush is
+  // limited to admin targets. This stops a low-privilege USER from triggering a
+  // system-wide auth-cache flush by spamming their own password change (CWE-770).
   @Method
-  cleanAuthCacheOnPasswordChange(ctx: Context<{ password?: string }>, res: any) {
-    if (ctx.params.password && this.broker.cacher) {
-      this.broker.cacher.clean('auth.parseToken**');
+  async cleanAuthCacheOnPasswordChange(ctx: Context<{ password?: string }>, res: any) {
+    if (!ctx.params.password || !this.broker.cacher) return res;
+
+    const userId = typeof res?.user === 'number' ? res.user : res?.user?.id;
+    if (userId) {
+      const user: User = await this.broker.call('users.resolve', { id: userId });
+      if (user?.type === UserType.ADMIN || user?.type === UserType.SUPER_ADMIN) {
+        this.broker.cacher.clean('auth.parseToken**');
+      }
     }
     return res;
   }

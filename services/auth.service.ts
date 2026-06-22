@@ -590,4 +590,13 @@ export default class AuthService extends moleculer.Service {
       this.broker.fatal("Environment variable 'JWT_SECRET' must be configured!");
     }
   }
+
+  async started() {
+    // Drop parseToken results cached by a previous build — they predate this
+    // deploy and lack `passwordMustChange`, which would otherwise let an expired
+    // admin slip past the gate for up to the cache TTL right after rollout.
+    if (this.broker.cacher) {
+      await this.broker.cacher.clean('auth.parseToken**');
+    }
+  }
 }
