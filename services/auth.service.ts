@@ -293,6 +293,15 @@ export default class AuthService extends moleculer.Service {
       userId: result.id,
     });
 
+    // Carried on ctx.meta.user so the API gate can lock expired admins to the
+    // password-change flow. Cached with this result (1h) and invalidated by
+    // usersLocal on password change, so unlocking is immediate.
+    result.passwordMustChange = await ctx.call('usersLocal.passwordMustChange', {
+      userId: result.id,
+      type: result.type,
+      strategy: result.strategy,
+    });
+
     return result;
   }
 

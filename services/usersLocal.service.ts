@@ -20,9 +20,10 @@ import {
   emailCanBeSent,
   generateHashAndSignatureQueryParams,
   generateUUID,
+  isPasswordExpired,
   sendUserInvitationEmail,
 } from '../utils';
-import { AppAuthMeta, UserAuthMeta } from './api.service';
+import { AppAuthMeta, AuthStrategy, UserAuthMeta } from './api.service';
 import { App } from './apps.service';
 import { UserGroupRole } from './userGroups.service';
 import { User, UserType } from './users.service';
@@ -32,6 +33,7 @@ export interface UserLocal extends BaseModelInterface {
   userId?: number;
   email: string;
   password: string;
+  lastPasswordChangeAt?: Date | string;
 }
 
 @Service({
@@ -94,6 +96,11 @@ export interface UserLocal extends BaseModelInterface {
         },
       },
 
+      lastPasswordChangeAt: {
+        type: 'date',
+        columnType: 'datetime',
+      },
+
       ...COMMON_FIELDS,
     },
 
@@ -108,6 +115,10 @@ export interface UserLocal extends BaseModelInterface {
     before: {
       invite: 'validateIfDataIsValid',
       updateUser: ['validateIfDataIsValid', 'validateIfAuthorized'],
+      update: 'stampPasswordChangedAt',
+    },
+    after: {
+      update: 'cleanAuthCacheOnPasswordChange',
     },
   },
 })
@@ -411,6 +422,18 @@ export default class UsersLocalService extends moleculer.Service {
 
     const { meta } = ctx;
 
+    // A logged-in admin whose password is expired is locked to changing their
+    // OWN password — they must not act on other users until they rotate. The
+    // api.service gate already blocks every other action; this stops the one
+    // allow-listed action (updateUser) from being aimed at someone else.
+    if (meta.user?.passwordMustChange && id !== meta.user.id) {
+      throw new moleculer.Errors.MoleculerClientError(
+        'Password change required.',
+        403,
+        'PASSWORD_CHANGE_REQUIRED',
+      );
+    }
+
     const userLocal: UserLocal = await ctx.call('usersLocal.findOne', {
       query: { user: id },
     });
@@ -564,6 +587,32 @@ export default class UsersLocalService extends moleculer.Service {
     return user.id;
   }
 
+  // Whether the given user must rotate their password before they can use the
+  // system. Single source of truth for both the API gate (auth.parseToken) and
+  // the /me response (users.getAuthUser). Only admins with a local password are
+  // subject to the policy — everyone else short-circuits to false (no DB read).
+  @Action({
+    params: {
+      userId: 'number|convert',
+      type: 'string',
+      strategy: 'string',
+    },
+  })
+  async passwordMustChange(
+    ctx: Context<{ userId: number; type: UserType; strategy: AuthStrategy }>,
+  ) {
+    const { userId, type, strategy } = ctx.params;
+
+    const isAdmin = type === UserType.ADMIN || type === UserType.SUPER_ADMIN;
+    if (!isAdmin || strategy !== AuthStrategy.LOCAL) return false;
+
+    const userLocal: UserLocal = await ctx.call('usersLocal.findOne', {
+      query: { user: userId },
+    });
+
+    return isPasswordExpired(userLocal?.lastPasswordChangeAt);
+  }
+
   @Method
   encryptPassword(password: string) {
     return bcrypt.hashSync(password, 10);
@@ -572,6 +621,28 @@ export default class UsersLocalService extends moleculer.Service {
   @Method
   isPasswordValid(hashedPassword: string, password: string) {
     return bcrypt.compare(hashedPassword, password);
+  }
+
+  // Stamp the rotation clock whenever a new password is written. Invite-set,
+  // reset and self-service change all funnel through `update` with `password`,
+  // so a single before-hook covers every path.
+  @Method
+  stampPasswordChangedAt(ctx: Context<{ password?: string; lastPasswordChangeAt?: Date }>) {
+    if (ctx.params.password) {
+      ctx.params.lastPasswordChangeAt = new Date();
+    }
+    return ctx;
+  }
+
+  // After a password change, drop the cached `auth.parseToken` results so the
+  // `passwordMustChange` flag (computed there, cached 1h) refreshes on the next
+  // request — otherwise the user stays locked for up to the cache TTL.
+  @Method
+  cleanAuthCacheOnPasswordChange(ctx: Context<{ password?: string }>, res: any) {
+    if (ctx.params.password && this.broker.cacher) {
+      this.broker.cacher.clean('auth.parseToken**');
+    }
+    return res;
   }
 
   @Method
