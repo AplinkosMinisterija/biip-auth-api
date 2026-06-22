@@ -332,6 +332,21 @@ export default class ApiService extends moleculer.Service {
       );
     }
 
+    // Lock an admin whose password is expired to the password-change flow:
+    // every action is rejected except reading their own profile, logging out,
+    // and the password-change endpoint itself. Fail closed — anything not on
+    // the allow-list is denied while the flag is set.
+    if (user.passwordMustChange && !this.isAllowedWhilePasswordExpired(req.$action?.name)) {
+      return this.rejectAuth(
+        ctx,
+        new Errors.MoleculerClientError(
+          'Password change required.',
+          403,
+          'PASSWORD_CHANGE_REQUIRED',
+        ),
+      );
+    }
+
     const aTypes = Array.isArray(req.$action.types) ? req.$action.types : [req.$action.types];
     const oTypes = Array.isArray(req.$route.opts.types)
       ? req.$route.opts.types
@@ -349,6 +364,14 @@ export default class ApiService extends moleculer.Service {
     }
 
     return Promise.resolve(ctx);
+  }
+
+  // Actions an admin may still call while their password is expired: read own
+  // profile, log out, and change the password (self-scoped inside the action).
+  @Method
+  isAllowedWhilePasswordExpired(actionName?: string): boolean {
+    if (!actionName) return false;
+    return ['users.me', 'auth.logout', 'usersLocal.updateUser'].includes(actionName);
   }
 
   @Action({

@@ -8,6 +8,9 @@ export enum EndpointType {
   PUBLIC = 'PUBLIC',
 }
 
+// Admin/super-admin local passwords must be rotated at least this often.
+export const PASSWORD_MAX_AGE_DAYS = 90;
+
 export function throwUnauthorizedError(message?: string, data?: any): Errors.MoleculerError {
   throw new Moleculer.Errors.MoleculerClientError(
     message || `Unauthorized.`,

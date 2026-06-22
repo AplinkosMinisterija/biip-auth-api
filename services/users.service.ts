@@ -40,6 +40,7 @@ export interface User extends BaseModelInterface {
   inheritedApps?: App[];
   personalCode?: string;
   fullName: string;
+  passwordMustChange?: boolean;
 }
 
 @Service({
@@ -327,7 +328,12 @@ export default class UsersService extends moleculer.Service {
         populate: ['permissions', 'municipalities'],
       });
       const userInner: any = await getInnerUser(typeId, type);
-      return { ...userInner, ...user };
+      const passwordMustChange: boolean = await ctx.call('usersLocal.passwordMustChange', {
+        userId: id,
+        type: user.type,
+        strategy: type,
+      });
+      return { ...userInner, ...user, passwordMustChange };
     }
   }
 
