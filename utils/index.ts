@@ -2,6 +2,7 @@ export * from './tokens';
 export * from './hashes';
 export * from './mails';
 export * from './recaptcha';
+export * from './password';
 
 export const normalizeName = (words: string) => {
   if (!words) return;

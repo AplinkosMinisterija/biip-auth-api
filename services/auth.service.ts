@@ -306,6 +306,15 @@ export default class AuthService extends moleculer.Service {
       userId: result.id,
     });
 
+    // Carried on ctx.meta.user so the API gate can lock expired admins to the
+    // password-change flow. Cached with this result (1h) and invalidated by
+    // usersLocal on password change, so unlocking is immediate.
+    result.passwordMustChange = await ctx.call('usersLocal.passwordMustChange', {
+      userId: result.id,
+      type: result.type,
+      strategy: result.strategy,
+    });
+
     return result;
   }
 
@@ -705,6 +714,15 @@ export default class AuthService extends moleculer.Service {
   created() {
     if (!process.env.JWT_SECRET) {
       this.broker.fatal("Environment variable 'JWT_SECRET' must be configured!");
+    }
+  }
+
+  async started() {
+    // Drop parseToken results cached by a previous build — they predate this
+    // deploy and lack `passwordMustChange`, which would otherwise let an expired
+    // admin slip past the gate for up to the cache TTL right after rollout.
+    if (this.broker.cacher) {
+      await this.broker.cacher.clean('auth.parseToken**');
     }
   }
 }
