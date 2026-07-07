@@ -280,4 +280,56 @@ describe('Security hardening', () => {
         .expect(200);
     });
   });
+
+  // Removing a company member must authorize by GROUP-admin membership, not global
+  // UserType. External company managers are UserType.USER (eVartai default), so the
+  // old [ADMIN, SUPER_ADMIN] gate on userGroups.unassign 401'd them — tenant apps
+  // could invite a member but never remove one (local row deleted, auth membership
+  // left dangling). This mirrors the usersEvartai.invite authz.
+  describe('group-admin can unassign a member (invite parity)', () => {
+    const unassign = (userId: number, groupId: number, token: string) =>
+      request(apiService.server)
+        .post(`/api/users/${userId}/groups/${groupId}/unassign`)
+        .set(apiHelper.getHeaders(token, apiHelper.appFishing.apiKey));
+
+    it('a group-ADMIN (UserType.USER) can unassign a member of their company', async () => {
+      await unassign(apiHelper.fisherUser.id, apiHelper.groupFishersCompany.id, apiHelper.fisherToken)
+        .expect(200)
+        .expect((res: any) => expect(res.body.success).toEqual(true));
+
+      const membership = await broker.call('userGroups.findOne', {
+        query: { user: apiHelper.fisherUser.id, group: apiHelper.groupFishersCompany.id },
+      });
+      expect(membership).toBeFalsy();
+
+      // restore fixture state so ordering can't couple to this suite
+      await broker.call('userGroups.create', {
+        user: apiHelper.fisherUser.id,
+        group: apiHelper.groupFishersCompany.id,
+        role: 'USER',
+      });
+    });
+
+    it('a non-admin group member cannot unassign', () => {
+      return unassign(
+        apiHelper.fisher.id,
+        apiHelper.groupFishersCompany.id,
+        apiHelper.fisherUserToken,
+      ).expect((res: any) => {
+        expect([401, 403]).toContain(res.status);
+        expect(res.body.type).toEqual('AUTH_UNAUTHORIZED_GROUP');
+      });
+    });
+
+    it('a group-ADMIN cannot unassign from a company of another app', () => {
+      return unassign(
+        apiHelper.fisherUser.id,
+        apiHelper.groupHuntersCompany.id,
+        apiHelper.fisherToken,
+      ).expect((res: any) => {
+        expect([401, 403]).toContain(res.status);
+        expect(res.body.type).toEqual('AUTH_UNAUTHORIZED_GROUP');
+      });
+    });
+  });
 });
