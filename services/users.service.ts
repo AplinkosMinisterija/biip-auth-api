@@ -227,14 +227,22 @@ export interface User extends BaseModelInterface {
 
   actions: {
     ...DISABLE_REST_ACTIONS,
+    // Under the gateway's `mappingPolicy: 'all'`, `rest: null` is NOT enough —
+    // these raw CRUD actions stay reachable by name (e.g. `POST /api/users/create`)
+    // and so must be type-gated. The real HTTP user lifecycle goes through
+    // usersLocal.invite (create) / usersLocal.update (PATCH /:id) / users.removeUser
+    // (DELETE /:id); internal broker callers bypass the gateway `authorize()`.
     create: {
       rest: null,
+      types: [EndpointType.SUPER_ADMIN],
     },
     update: {
       rest: null,
+      types: [EndpointType.SUPER_ADMIN],
     },
     remove: {
       rest: null,
+      types: [EndpointType.SUPER_ADMIN],
     },
   },
 
@@ -262,6 +270,9 @@ export default class UsersService extends moleculer.Service {
   // cacheCleanEvents). Caller must have already validated the user exists;
   // adapter.updateById skips default scopes (notDeleted) and field validation.
   @Action({
+    // Internal-only (login flows). Type-gate so the gateway's mappingPolicy:'all'
+    // can't let an arbitrary user touch another user's lastLoggedInAt.
+    types: [EndpointType.SUPER_ADMIN],
     params: {
       id: 'number|convert',
     },
@@ -338,6 +349,10 @@ export default class UsersService extends moleculer.Service {
   }
 
   @Action({
+    // Grants/revokes a user's app access (privilege change). No HTTP caller; all
+    // real toggling is internal (usersLocal/usersEvartai). SUPER_ADMIN-gate so the
+    // gateway's mappingPolicy:'all' can't expose it to any logged-in user.
+    types: [EndpointType.SUPER_ADMIN],
     params: {
       id: 'number|convert',
       appId: 'number|convert',
@@ -367,6 +382,8 @@ export default class UsersService extends moleculer.Service {
   }
 
   @Action({
+    // Bulk app-access mutation; same exposure as toggleApp. Internal-only.
+    types: [EndpointType.SUPER_ADMIN],
     params: {
       id: {
         type: 'number',
@@ -398,6 +415,10 @@ export default class UsersService extends moleculer.Service {
   }
 
   @Action({
+    // Group membership == permission grant. No HTTP caller (the admin "assign to
+    // group" flow uses userGroups.assign, which is ADMIN-gated separately).
+    // Internal-only; SUPER_ADMIN-gate against the mappingPolicy:'all' bypass.
+    types: [EndpointType.SUPER_ADMIN],
     params: {
       id: {
         type: 'number',

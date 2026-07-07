@@ -133,8 +133,34 @@ interface PermissionType {
 
   actions: {
     ...DISABLE_REST_ACTIONS,
+    // The @moleculer/database mixin exposes get/list/create/update/remove over
+    // REST by default. Permissions are the authorization source of truth, so the
+    // raw CRUD surface must NOT be reachable by ordinary users: an authenticated
+    // USER could otherwise `PATCH /api/permissions/:id {accesses:["*"]}` to grant
+    // themselves anything (privilege escalation), or enumerate every permission
+    // via `GET /api/permissions`. NOTE: under the gateway's `mappingPolicy: 'all'`,
+    // `rest: null` is NOT sufficient — an action with no alias is still reachable
+    // by name (e.g. `POST /api/permissions/create`), so every mutating action MUST
+    // also be `types`-gated. Mutations go through the explicit, ADMIN-typed
+    // `findOrCreate` / `modifyAccessForGroup` actions; internal broker calls (e.g.
+    // from findUsersByAccess) bypass the gateway `authorize()` and keep working.
     create: {
       rest: null,
+      types: [EndpointType.SUPER_ADMIN],
+    },
+    update: {
+      rest: null,
+      types: [EndpointType.SUPER_ADMIN],
+    },
+    remove: {
+      rest: null,
+      types: [EndpointType.SUPER_ADMIN],
+    },
+    get: {
+      types: [EndpointType.ADMIN, EndpointType.SUPER_ADMIN],
+    },
+    list: {
+      types: [EndpointType.ADMIN, EndpointType.SUPER_ADMIN],
     },
   },
 
@@ -199,20 +225,37 @@ export default class PermissionsService extends moleculer.Service {
       },
     },
   })
-  async findUsersByAccess(ctx: Context<{ access: string; municipality: number }>) {
+  async findUsersByAccess(
+    ctx: Context<{ access: string; municipality: number }, AppAuthMeta>,
+  ) {
     const { access, municipality } = ctx.params;
+    const app = ctx.meta.app;
+
+    const query: GenericObject = {
+      accesses: {
+        $exists: true,
+      },
+      $raw: {
+        condition: `"accesses" @> ?::jsonb`,
+        bindings: [JSON.stringify([access])],
+      },
+    };
+
+    // PII guard: this endpoint is API-key only (no user). Scope the lookup to the
+    // calling app so one app's key cannot enumerate users (email/name) across the
+    // whole BIIP estate. ADMIN-type apps legitimately span apps, so they keep the
+    // cross-app view. Fail CLOSED if there is no app context (should be
+    // unreachable — verifyApiKey 401s first — but never return unscoped PII).
+    if (!app) {
+      throwUnauthorizedError('No application context.');
+    }
+    if (app.type !== AppType.ADMIN) {
+      query.app = app.id;
+    }
 
     const parentCtx: any = {};
     const permissions: Array<Permission> = await ctx.call('permissions.find', {
-      query: {
-        accesses: {
-          $exists: true,
-        },
-        $raw: {
-          condition: `"accesses" @> ?::jsonb`,
-          bindings: [JSON.stringify([access])],
-        },
-      },
+      query,
     });
 
     let userList: Array<any> = await Promise.all(

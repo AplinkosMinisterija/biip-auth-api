@@ -330,7 +330,14 @@ export default class UserGroupsService extends moleculer.Service {
       path: '/unassign',
       basePath: '/users/:user/groups/:group',
     },
-    types: [EndpointType.ADMIN, EndpointType.SUPER_ADMIN],
+    // AuthZ by group-admin membership, not global UserType. External company
+    // managers land in auth as UserType.USER (eVartai users default to USER), so
+    // a blunt [ADMIN, SUPER_ADMIN] gate 401'd them: tenant apps could ADD a member
+    // (via users.invite, which self-authorizes and assigns over an internal broker
+    // call) but never REMOVE one — the app deleted its local row while the auth
+    // membership lingered (desync). Mirror the usersEvartai.invite check. Dropping
+    // the type gate is safe here: `unassign` has NO internal broker callers (only
+    // the tenant apps' HTTP unassignFromGroup), so no login/invite flow is touched.
     params: {
       user: {
         type: 'number',
@@ -342,8 +349,25 @@ export default class UserGroupsService extends moleculer.Service {
       },
     },
   })
-  async unassign(ctx: Context<{ user: number; group: number }>) {
+  async unassign(ctx: Context<{ user: number; group: number }, AppAuthMeta & UserAuthMeta>) {
     const { user, group } = ctx.params;
+    const { meta } = ctx;
+
+    // getVisibleGroupsIds({edit:true}) returns, scoped to the calling app: every
+    // app group for SUPER_ADMIN, app companies for ADMIN, the groups the caller is
+    // group-ADMIN of for a USER, and all app groups for an app-key-only call.
+    const editableGroupIds: any[] = await ctx.call(
+      'permissions.getVisibleGroupsIds',
+      { edit: true },
+      { meta },
+    );
+    if (!editableGroupIds?.map(Number).includes(Number(group))) {
+      throw new moleculer.Errors.MoleculerClientError(
+        `Not authorized to modify membership of group '${group}'.`,
+        403,
+        'AUTH_UNAUTHORIZED_GROUP',
+      );
+    }
 
     const userGroup: UserGroup = await ctx.call('userGroups.findOne', {
       query: { user, group },

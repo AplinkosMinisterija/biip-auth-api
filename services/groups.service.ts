@@ -354,7 +354,11 @@ export default class GroupsService extends moleculer.Service {
     return mapIdRecursively(groups);
   }
 
-  @Action()
+  @Action({
+    // Wraps groups.create — mirror its gate. Reachable by name under the gateway's
+    // mappingPolicy:'all', so it must be type-gated like create/update/remove.
+    types: [EndpointType.ADMIN, EndpointType.SUPER_ADMIN],
+  })
   async findOrCreate(ctx: Context<{ companyCode: string }, AppAuthMeta>) {
     const group: Group = await ctx.call('groups.findOne', {
       query: ctx.params,
@@ -375,6 +379,9 @@ export default class GroupsService extends moleculer.Service {
   }
 
   @Action({
+    // Mutates a group's app assignment. No HTTP caller (internal usersEvartai
+    // flows only); SUPER_ADMIN-gate against the mappingPolicy:'all' bypass.
+    types: [EndpointType.SUPER_ADMIN],
     params: {
       id: {
         type: 'number',
@@ -506,7 +513,11 @@ export default class GroupsService extends moleculer.Service {
   }
 
   @Action({
+    // This is the real `DELETE /api/groups/:id` handler (the mixin `remove` is
+    // rest:null). It was type-less — any authenticated USER could delete any
+    // group. Admin screens delete groups as ADMIN, so gate ADMIN+SUPER_ADMIN.
     rest: 'DELETE /:id',
+    types: [EndpointType.ADMIN, EndpointType.SUPER_ADMIN],
     params: {
       id: {
         type: 'number',

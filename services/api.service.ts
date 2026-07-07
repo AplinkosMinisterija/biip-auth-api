@@ -198,6 +198,9 @@ export default class ApiService extends moleculer.Service {
   ): Promise<unknown> {
     const meta = ctx.meta as any;
     if (meta.user || meta.app) {
+      // Do NOT log raw `params`, `meta`, or `locals`: meta carries the bearer
+      // `authToken` and params can carry credentials/PII. Log only identifiers
+      // needed to trace the failure.
       const context = pick(
         ctx,
         'nodeID',
@@ -209,18 +212,15 @@ export default class ApiService extends moleculer.Service {
         'parentID',
         'requestID',
         'caller',
-        'params',
-        'meta',
-        'locals',
       );
-      const action = pick(ctx.action, 'rawName', 'name', 'params', 'rest');
+      const action = pick(ctx.action, 'rawName', 'name', 'rest');
       const logInfo = {
         action: 'AUTH_FAILURE',
         details: {
           error,
           context,
           action,
-          meta,
+          meta: { userId: meta.user?.id, appId: meta.app?.id },
         },
       };
       this.logger.error(logInfo);
@@ -376,8 +376,10 @@ export default class ApiService extends moleculer.Service {
 
   @Action({
     rest: 'POST /cache/clean',
-
-    auth: EndpointType.PUBLIC,
+    // Flushing the whole Redis cacher forces the heavy inherited_user_apps view
+    // scan on every subsequent request (service-wide brownout). Restrict to
+    // SUPER_ADMIN — was previously PUBLIC, i.e. any app API key could DoS auth.
+    types: [EndpointType.SUPER_ADMIN],
   })
   cleanCache() {
     this.broker.cacher.clean();

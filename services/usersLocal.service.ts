@@ -553,6 +553,14 @@ export default class UsersLocalService extends moleculer.Service {
   }
 
   @Action({
+    // Internal-only: the real HTTP delete goes through `users.removeUser`
+    // (validateIfAuthorized hook), which delegates here via an internal call.
+    // This action is reachable by name under the gateway's `mappingPolicy: 'all'`
+    // (`POST /api/usersLocal/removeUser`) and has no before-hook, so without a
+    // type gate any authenticated USER could delete an arbitrary user (the inner
+    // `users.remove` call bypasses its own gateway gate). SUPER_ADMIN-gate it;
+    // internal broker callers bypass authorize().
+    types: [EndpointType.SUPER_ADMIN],
     params: {
       id: {
         type: 'number',
@@ -615,12 +623,15 @@ export default class UsersLocalService extends moleculer.Service {
 
   @Method
   encryptPassword(password: string) {
-    return bcrypt.hashSync(password, 10);
+    // cost 12: stronger work factor for a central gov IdP. Existing cost-10
+    // hashes still verify (bcrypt encodes the cost in the hash).
+    return bcrypt.hashSync(password, 12);
   }
 
   @Method
-  isPasswordValid(hashedPassword: string, password: string) {
-    return bcrypt.compare(hashedPassword, password);
+  isPasswordValid(plainPassword: string, hashedPassword: string) {
+    // bcrypt.compare(data, encrypted) — plaintext first, stored hash second.
+    return bcrypt.compare(plainPassword, hashedPassword);
   }
 
   // Stamp the rotation clock whenever a new password is written. Invite-set,

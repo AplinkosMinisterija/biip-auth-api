@@ -11,6 +11,7 @@ import {
   COMMON_DEFAULT_SCOPES,
   COMMON_FIELDS,
   COMMON_SCOPES,
+  EndpointType,
   FieldHookCallback,
   throwBadRequestError,
   throwNotFoundError,
@@ -174,12 +175,25 @@ export default class UsersEvartaiService extends moleculer.Service {
       throwIfNotExist: true,
     });
 
-    // default assignment to group
+    // default assignment to group — only honour a defaultGroupId that actually
+    // belongs to the app being logged into. Otherwise the caller could self-assign
+    // into ANY group by id (privilege escalation). An invalid id is ignored (not
+    // fatal) so a bad param can't block an otherwise valid login.
     if (defaultGroupId) {
-      await ctx.call('userGroups.assign', {
-        user: user.id,
+      const allowedAppIds: any[] = await ctx.call('inheritedGroupApps.getAppsByGroup', {
         group: defaultGroupId,
       });
+      if (allowedAppIds?.map(Number).includes(Number(appId))) {
+        await ctx.call('userGroups.assign', {
+          user: user.id,
+          group: defaultGroupId,
+        });
+      } else {
+        this.logger.warn('Ignoring defaultGroupId that does not belong to the app', {
+          defaultGroupId,
+          appId,
+        });
+      }
     }
 
     // update on every login via evartai
@@ -208,12 +222,26 @@ export default class UsersEvartaiService extends moleculer.Service {
       host: 'string',
     },
   })
-  async sign(ctx: Context<{ host: string }>) {
+  async sign(ctx: Context<{ host: string }, AppAuthMeta>) {
+    // `host` is where eVartai sends the user back (with the auth ticket in the
+    // URL). An unvalidated host means the ticket can be delivered to an attacker
+    // domain → account takeover. Restrict to the registered-app allow-list at
+    // ORIGIN level (protocol+host) via auth.isRedirectAllowed — origin
+    // confinement closes off-domain delivery while tolerating app URLs that carry
+    // a path. (redirectEvartai keeps the stricter path-aware check on its 302.)
+    const allowed: boolean = await ctx.call('auth.isRedirectAllowed', {
+      target: ctx.params.host,
+    });
+    if (!allowed) {
+      return throwBadRequestError('Invalid host');
+    }
+
     try {
-      return fetch(`${process.env.EVARTAI_HOST}/auth/sign`, {
+      const response = await fetch(`${process.env.EVARTAI_HOST}/auth/sign`, {
         method: 'POST',
         body: JSON.stringify({ host: ctx.params.host }),
-      }).then((r) => r.json());
+      });
+      return await response.json();
     } catch (err) {
       return throwBadRequestError('Cannot sign ticket', err);
     }
@@ -385,6 +413,24 @@ export default class UsersEvartaiService extends moleculer.Service {
           throwNotFoundError('Company not found');
         }
 
+        // AuthZ: only assign a person into a company the caller may administer.
+        // getVisibleGroupsIds({edit:true}) returns, scoped to the calling app:
+        // every app group for SUPER_ADMIN, otherwise the groups the caller is
+        // ADMIN of. Without this any authenticated USER could add an arbitrary
+        // person into any company (cross-company privilege grant).
+        const editableGroupIds: any[] = await ctx.call(
+          'permissions.getVisibleGroupsIds',
+          { edit: true },
+          { meta },
+        );
+        if (!editableGroupIds?.map(Number).includes(Number(companyId))) {
+          throw new moleculer.Errors.MoleculerClientError(
+            `Not authorized to assign users to company '${companyId}'.`,
+            403,
+            'AUTH_UNAUTHORIZED_COMPANY',
+          );
+        }
+
         const assignedToCompany = await this.assignUserToCompanyIfCompanyExists(
           company,
           user,
@@ -480,6 +526,13 @@ export default class UsersEvartaiService extends moleculer.Service {
   }
 
   @Action({
+    // Internal-only: the real HTTP delete goes through `users.removeUser`
+    // (validateIfAuthorized hook). This action is reachable by name under the
+    // gateway's `mappingPolicy: 'all'` (`POST /api/usersEvartai/removeUser`), and
+    // it has no before-hook, so without a type gate any authenticated USER could
+    // revoke an arbitrary user's app access. SUPER_ADMIN-gate it; internal broker
+    // callers bypass authorize().
+    types: [EndpointType.SUPER_ADMIN],
     params: {
       id: {
         type: 'number',
@@ -647,7 +700,7 @@ export default class UsersEvartaiService extends moleculer.Service {
     let userData: any;
 
     try {
-      const url = `${process.env.EVARTAI_HOST}/auth/data?ticket=${ticket}`;
+      const url = `${process.env.EVARTAI_HOST}/auth/data?ticket=${encodeURIComponent(ticket)}`;
       userData = await fetch(url).then((r) => r.json());
     } catch (err) {
       throwBadRequestError('Cannot parse ticket', err);
