@@ -283,7 +283,16 @@ export default class UserGroupsService extends moleculer.Service {
       path: '/assign',
       basePath: '/users/:user/groups/:group',
     },
-    types: [EndpointType.ADMIN, EndpointType.SUPER_ADMIN],
+    // Unlike `unassign` (which authorizes by group-admin membership in its body),
+    // `assign` keeps a type gate widened with APP. It HAS in-process broker callers
+    // — usersEvartai company auto-join / defaultGroupId on login, and
+    // users.assignNewGroupsToUser — where the subject is not yet a group-admin, so
+    // a body ownership check would 401 legitimate logins. Internal broker calls
+    // bypass the gateway (and thus this gate) entirely; APP only widens the HTTP
+    // path so the tenant apps' service-to-service assignToGroup (valid app key,
+    // acting user is UserType.USER) is allowed while a browser (no app key) is not.
+    // The calling app authorizes the membership change on its side before calling.
+    types: [EndpointType.ADMIN, EndpointType.SUPER_ADMIN, EndpointType.APP],
     params: {
       user: {
         type: 'number',

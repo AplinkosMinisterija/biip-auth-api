@@ -332,4 +332,39 @@ describe('Security hardening', () => {
       });
     });
   });
+
+  // `assign` has in-process login/invite callers (company auto-join,
+  // defaultGroupId, assignNewGroupsToUser) whose subject is not yet a
+  // group-admin, so it cannot move authorization into its body like `unassign`.
+  // Instead it is typed APP: a trusted service holding a valid app key may call
+  // it (the tenant apps' assignToGroup, acting user = UserType.USER); a browser,
+  // which never holds an app key, still cannot. Internal broker calls bypass the
+  // gateway and are unaffected.
+  describe('userGroups.assign is service-callable with a valid app key (APP type)', () => {
+    const assign = (userId: number, groupId: number, token: string, apiKey?: string | boolean) =>
+      request(apiService.server)
+        .post(`/api/users/${userId}/groups/${groupId}/assign`)
+        .set(apiHelper.getHeaders(token, apiKey))
+        .send({ role: 'USER' });
+
+    it('a UserType.USER caller with a valid app key can assign (service-to-service)', () => {
+      return assign(
+        apiHelper.fisherUser.id,
+        apiHelper.groupFishersCompany.id,
+        apiHelper.fisherUserToken,
+        apiHelper.appFishing.apiKey,
+      ).expect(200);
+    });
+
+    it('the same caller without an app key (browser) is still refused', () => {
+      return assign(
+        apiHelper.fisherUser.id,
+        apiHelper.groupFishersCompany.id,
+        apiHelper.fisherUserToken,
+        false,
+      ).expect((res: any) => {
+        expect([401, 403]).toContain(res.status);
+      });
+    });
+  });
 });
