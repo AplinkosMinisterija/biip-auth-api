@@ -6,6 +6,10 @@ export enum EndpointType {
   USER = 'USER',
   SUPER_ADMIN = 'SUPER_ADMIN',
   PUBLIC = 'PUBLIC',
+  // A trusted service presenting a valid app API key (X-API-Key). Reachable only
+  // service-to-service (a browser never holds an app key), so it widens a gate
+  // for backend callers without exposing the endpoint to the public web.
+  APP = 'APP',
 }
 
 // Admin/super-admin local passwords must be rotated at least this often.

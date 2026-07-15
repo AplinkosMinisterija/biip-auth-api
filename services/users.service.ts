@@ -466,9 +466,14 @@ export default class UsersService extends moleculer.Service {
       types: { type: 'array', items: 'string', enum: Object.values(EndpointType) },
     },
   })
-  async validateType(ctx: Context<{ types: EndpointType[] }, UserAuthMeta>) {
+  async validateType(ctx: Context<{ types: EndpointType[] }, UserAuthMeta & AppAuthMeta>) {
     const types = ctx.params.types;
     if (types.includes(EndpointType.PUBLIC)) return true;
+
+    // Service-to-service: an endpoint typed APP is reachable by a trusted backend
+    // holding a valid app API key (X-API-Key -> ctx.meta.app). A browser never
+    // holds an app key, so this never widens the public surface.
+    if (types.includes(EndpointType.APP) && ctx.meta?.app?.id) return true;
 
     const userType = ctx.meta?.user?.type;
     const isAdmin = [UserType.ADMIN].includes(userType);
