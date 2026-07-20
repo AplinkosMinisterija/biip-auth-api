@@ -339,7 +339,7 @@ export default class UserGroupsService extends moleculer.Service {
       path: '/unassign',
       basePath: '/users/:user/groups/:group',
     },
-    // AuthZ by group-admin membership, not global UserType. External company
+    // AuthZ by group membership, not global UserType. External company
     // managers land in auth as UserType.USER (eVartai users default to USER), so
     // a blunt [ADMIN, SUPER_ADMIN] gate 401'd them: tenant apps could ADD a member
     // (via users.invite, which self-authorizes and assigns over an internal broker
@@ -362,15 +362,16 @@ export default class UserGroupsService extends moleculer.Service {
     const { user, group } = ctx.params;
     const { meta } = ctx;
 
-    // getVisibleGroupsIds({edit:true}) returns, scoped to the calling app: every
-    // app group for SUPER_ADMIN, app companies for ADMIN, the groups the caller is
-    // group-ADMIN of for a USER, and all app groups for an app-key-only call.
-    const editableGroupIds: any[] = await ctx.call(
-      'permissions.getVisibleGroupsIds',
-      { edit: true },
-      { meta },
-    );
-    if (!editableGroupIds?.map(Number).includes(Number(group))) {
+    // Membership (any role), NOT group-ADMIN — same contract as the
+    // usersEvartai.invite guard. Tenant apps map their manager roles (e.g.
+    // zvejyba USER_ADMIN) to auth group-USER — auth's two-role group model
+    // cannot express them — and each app authorizes who may manage members
+    // before calling. Requiring group-ADMIN here 403'd the removal cascade for
+    // those managers (local row deleted, auth membership lingered, the removed
+    // member got re-provisioned on next login). The cross-company boundary
+    // stays: a caller can never touch a group outside their membership tree.
+    const visibleGroupIds: any[] = await ctx.call('permissions.getVisibleGroupsIds', {}, { meta });
+    if (!visibleGroupIds?.map(Number).includes(Number(group))) {
       throw new moleculer.Errors.MoleculerClientError(
         `Not authorized to modify membership of group '${group}'.`,
         403,

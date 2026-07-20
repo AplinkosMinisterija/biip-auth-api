@@ -79,8 +79,12 @@ describe('Security hardening', () => {
     });
   });
 
-  // P1-6: assigning a person into a company requires admin rights on that
-  // company. A group member who is not its admin must be refused.
+  // P1-6 (revised): assigning a person into a company requires MEMBERSHIP of
+  // that company, not group-ADMIN. Tenant apps map their manager roles (e.g.
+  // zvejyba USER_ADMIN) to auth group-USER and authorize member management on
+  // their side before calling; requiring group-ADMIN here 403'd every
+  // USER_ADMIN invite in prod. The boundary that stays is cross-company:
+  // a caller can never reach a company outside their membership tree.
   describe('cross-company invite guard', () => {
     it('company admin can assign a person to their company', () => {
       return request(apiService.server)
@@ -94,7 +98,7 @@ describe('Security hardening', () => {
         .expect(200);
     });
 
-    it('non-admin group member cannot assign a person to the company', () => {
+    it('a non-admin member can assign a person to their own company (tenant-app managers)', () => {
       return request(apiService.server)
         .post('/api/users/invite')
         .set(apiHelper.getHeaders(apiHelper.fisherUserToken, apiHelper.appFishing.apiKey))
@@ -103,10 +107,7 @@ describe('Security hardening', () => {
           companyId: apiHelper.groupFishersCompany.id,
           throwErrors: false,
         })
-        .expect((res: any) => {
-          expect([401, 403]).toContain(res.status);
-          expect(res.body.type).toEqual('AUTH_UNAUTHORIZED_COMPANY');
-        });
+        .expect(200);
     });
 
     it('company admin cannot assign into a company of another app', () => {
@@ -281,19 +282,25 @@ describe('Security hardening', () => {
     });
   });
 
-  // Removing a company member must authorize by GROUP-admin membership, not global
-  // UserType. External company managers are UserType.USER (eVartai default), so the
-  // old [ADMIN, SUPER_ADMIN] gate on userGroups.unassign 401'd them — tenant apps
-  // could invite a member but never remove one (local row deleted, auth membership
-  // left dangling). This mirrors the usersEvartai.invite authz.
-  describe('group-admin can unassign a member (invite parity)', () => {
+  // Removing a company member must authorize by group MEMBERSHIP, not global
+  // UserType and not group-ADMIN. External company managers are UserType.USER
+  // (eVartai default) and tenant-app manager roles (e.g. zvejyba USER_ADMIN) map
+  // to auth group-USER, so any stricter gate 403'd the tenant apps' removal
+  // cascade — local row deleted, auth membership left dangling, ghost member
+  // re-provisioned on next login. This mirrors the usersEvartai.invite authz:
+  // the boundary auth enforces is cross-company, the role policy is the app's.
+  describe('company member can unassign a member (invite parity)', () => {
     const unassign = (userId: number, groupId: number, token: string) =>
       request(apiService.server)
         .post(`/api/users/${userId}/groups/${groupId}/unassign`)
         .set(apiHelper.getHeaders(token, apiHelper.appFishing.apiKey));
 
     it('a group-ADMIN (UserType.USER) can unassign a member of their company', async () => {
-      await unassign(apiHelper.fisherUser.id, apiHelper.groupFishersCompany.id, apiHelper.fisherToken)
+      await unassign(
+        apiHelper.fisherUser.id,
+        apiHelper.groupFishersCompany.id,
+        apiHelper.fisherToken,
+      )
         .expect(200)
         .expect((res: any) => expect(res.body.success).toEqual(true));
 
@@ -310,15 +317,41 @@ describe('Security hardening', () => {
       });
     });
 
-    it('a non-admin group member cannot unassign', () => {
-      return unassign(
+    it('a non-admin member can unassign within their own company (tenant-app managers)', async () => {
+      await unassign(
         apiHelper.fisher.id,
         apiHelper.groupFishersCompany.id,
         apiHelper.fisherUserToken,
-      ).expect((res: any) => {
-        expect([401, 403]).toContain(res.status);
-        expect(res.body.type).toEqual('AUTH_UNAUTHORIZED_GROUP');
+      )
+        .expect(200)
+        .expect((res: any) => expect(res.body.success).toEqual(true));
+
+      const membership = await broker.call('userGroups.findOne', {
+        query: { user: apiHelper.fisher.id, group: apiHelper.groupFishersCompany.id },
       });
+      expect(membership).toBeFalsy();
+
+      // restore fixture state so ordering can't couple to this suite
+      await broker.call('userGroups.create', {
+        user: apiHelper.fisher.id,
+        group: apiHelper.groupFishersCompany.id,
+        role: 'ADMIN',
+      });
+    });
+
+    it('a member cannot unassign from a same-app company they do not belong to', async () => {
+      const otherCompany: any = await broker.call('groups.create', {
+        name: 'Other Fishers Company (unassign)',
+        apps: [apiHelper.appFishing.id],
+        companyCode: '300000003',
+      });
+
+      return unassign(apiHelper.fisher.id, otherCompany.id, apiHelper.fisherUserToken).expect(
+        (res: any) => {
+          expect([401, 403]).toContain(res.status);
+          expect(res.body.type).toEqual('AUTH_UNAUTHORIZED_GROUP');
+        },
+      );
     });
 
     it('a group-ADMIN cannot unassign from a company of another app', () => {
