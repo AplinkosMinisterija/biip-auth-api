@@ -413,17 +413,21 @@ export default class UsersEvartaiService extends moleculer.Service {
           throwNotFoundError('Company not found');
         }
 
-        // AuthZ: only assign a person into a company the caller may administer.
-        // getVisibleGroupsIds({edit:true}) returns, scoped to the calling app:
-        // every app group for SUPER_ADMIN, otherwise the groups the caller is
-        // ADMIN of. Without this any authenticated USER could add an arbitrary
-        // person into any company (cross-company privilege grant).
-        const editableGroupIds: any[] = await ctx.call(
+        // AuthZ: only assign a person into a company the caller belongs to.
+        // Membership (any role), NOT group-ADMIN: tenant apps map their manager
+        // roles (e.g. zvejyba USER_ADMIN) to auth group-USER — this two-role
+        // group model cannot express them — and each app authorizes who may
+        // manage members before calling. Requiring group-ADMIN here 403'd every
+        // USER_ADMIN invite in prod (AUTH_UNAUTHORIZED_COMPANY). The check that
+        // matters stays: a caller cannot reach a company outside their own
+        // membership tree (cross-company privilege grant), and ADMIN /
+        // SUPER_ADMIN / app-key-only callers keep their app-wide visibility.
+        const visibleGroupIds: any[] = await ctx.call(
           'permissions.getVisibleGroupsIds',
-          { edit: true },
+          {},
           { meta },
         );
-        if (!editableGroupIds?.map(Number).includes(Number(companyId))) {
+        if (!visibleGroupIds?.map(Number).includes(Number(companyId))) {
           throw new moleculer.Errors.MoleculerClientError(
             `Not authorized to assign users to company '${companyId}'.`,
             403,

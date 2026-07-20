@@ -253,6 +253,49 @@ describe("Test POST '/api/users/invite'", () => {
   });
 
   describe('Acting as fisher', () => {
+    // Tenant apps map their manager roles (e.g. zvejyba USER_ADMIN) to auth
+    // group-USER — auth's two-role group model cannot express them. The app
+    // authorizes who may manage members BEFORE calling users.invite, so auth
+    // must accept any member of the target company here and only enforce the
+    // cross-company boundary. Regression: PR #49 required group-ADMIN and
+    // 403'd every USER_ADMIN invite (AUTH_UNAUTHORIZED_COMPANY in prod).
+    describe('Invite person into a company (personalCode + companyId)', () => {
+      it('a non-admin member of the company can invite into it (success)', () => {
+        return request(apiService.server)
+          .post(endpoint)
+          .set(apiHelper.getHeaders(apiHelper.fisherUserToken, apiHelper.appFishing.apiKey))
+          .send({
+            personalCode: '91234567892',
+            companyId: apiHelper.groupFishersCompany.id,
+          })
+          .expect(200)
+          .expect((res: any) => {
+            expect(res.body.personalCode).toEqual('91234567892');
+            expect(res.body.role).toEqual('USER');
+          });
+      });
+
+      it('cannot invite into a same-app company they are not a member of (fail)', async () => {
+        const otherCompany: any = await broker.call('groups.create', {
+          name: 'Other Fishers Company',
+          apps: [apiHelper.appFishing.id],
+          companyCode: '112332965',
+        });
+
+        return request(apiService.server)
+          .post(endpoint)
+          .set(apiHelper.getHeaders(apiHelper.fisherUserToken, apiHelper.appFishing.apiKey))
+          .send({
+            personalCode: '91234567893',
+            companyId: otherCompany.id,
+          })
+          .expect(403)
+          .expect((res: any) => {
+            expect(res.body.type).toEqual('AUTH_UNAUTHORIZED_COMPANY');
+          });
+      });
+    });
+
     describe('Invite company with parent company', () => {
       it('With fishing group parent (success)', async () => {
         const companyCode = '196541141';
