@@ -258,19 +258,45 @@ export default class PermissionsService extends moleculer.Service {
       query,
     });
 
-    let userList: Array<any> = await Promise.all(
+    // A permission belongs to ONE app, but a group spans several: `GGAD` carries
+    // both a Medziokle and a Zuvinimas permission, while `user_groups.role` is a
+    // single role for the whole group. Expanding the group therefore yields
+    // people who have nothing to do with `p.app` — in production that mailed
+    // every national hunting incident to a fish-stocking-only account for five
+    // weeks (issue #57). The `query.app` guard above scopes the PERMISSION row;
+    // the PEOPLE it resolves to need the same scope, or the app boundary only
+    // holds for whoever asks, not for whoever is returned.
+    const userLists: Array<Array<number>> = await Promise.all(
       permissions.map(async (p) => {
-        if (p.user) return [p.user];
-        else if (p.group)
-          return ctx.call(
+        let ids: Array<any> = [];
+
+        if (p.user) {
+          ids = [p.user];
+        } else if (p.group) {
+          ids = await ctx.call(
             'userGroups.usersIdsInGroupRecursively',
             { id: p.group, role: p.role },
             { parentCtx },
           );
+        }
+
+        if (!ids.length || !p.app) return ids.map(Number);
+
+        // `inheritedUserApps` already resolves the whole precedence chain:
+        // SUPER_ADMIN holds every app, an explicit `users.apps_ids` overrides
+        // the group's, and an empty one inherits it (inherited_user_apps view).
+        return ctx.call(
+          'inheritedUserApps.getUserIdsByApp',
+          { app: p.app, users: ids.map(Number) },
+          { parentCtx },
+        );
       }),
     );
 
-    userList = userList.reduce((acc: any, item: any) => [...acc, ...item], []);
+    const userList: Array<number> = userLists.reduce(
+      (acc: Array<number>, item) => [...acc, ...item],
+      [],
+    );
 
     let users: Array<any> = await ctx.call(
       'users.find',
