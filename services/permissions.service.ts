@@ -138,12 +138,11 @@ interface PermissionType {
     // raw CRUD surface must NOT be reachable by ordinary users: an authenticated
     // USER could otherwise `PATCH /api/permissions/:id {accesses:["*"]}` to grant
     // themselves anything (privilege escalation), or enumerate every permission
-    // via `GET /api/permissions`. NOTE: under the gateway's `mappingPolicy: 'all'`,
-    // `rest: null` is NOT sufficient — an action with no alias is still reachable
-    // by name (e.g. `POST /api/permissions/create`), so every mutating action MUST
-    // also be `types`-gated. Mutations go through the explicit, ADMIN-typed
-    // `findOrCreate` / `modifyAccessForGroup` actions; internal broker calls (e.g.
-    // from findUsersByAccess) bypass the gateway `authorize()` and keep working.
+    // via `GET /api/permissions`. Every mutating action is also `types`-gated as
+    // defense in depth, should it ever be routed. Mutations go through the
+    // explicit, ADMIN-typed `findOrCreate` / `modifyAccessForGroup` actions;
+    // internal broker calls (e.g. from findUsersByAccess) bypass the gateway
+    // `authorize()` and keep working.
     create: {
       rest: null,
       types: [EndpointType.SUPER_ADMIN],

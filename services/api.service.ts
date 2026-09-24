@@ -163,8 +163,10 @@ function verifyApiKey(
           },
         },
 
-        // Mapping policy setting. More info: https://moleculer.services/docs/0.14/moleculer-web.html#Mapping-policy
-        mappingPolicy: 'all', // Available values: "all", "restrict"
+        // 'restrict': only REST aliases are reachable. 'all' would also map
+        // `/api/<service>/<action>` to every published action by name, including
+        // raw DB CRUD and internal helpers that carry no `types` gate.
+        mappingPolicy: 'restrict',
 
         // Enable/disable logging
         logging: true,
