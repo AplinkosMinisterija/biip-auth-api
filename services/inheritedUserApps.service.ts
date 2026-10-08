@@ -96,6 +96,14 @@ export default class InheritedUserAppsService extends moleculer.Service {
         type: 'number',
         convert: true,
       },
+      // Read by the handler but previously undeclared. Callers narrowing a
+      // known set of people down to the ones holding `app` rely on it.
+      users: {
+        type: 'array',
+        items: 'number|convert',
+        optional: true,
+      },
+      type: 'string|optional',
     },
   })
   async getUserIdsByApp(ctx: Context<{ users?: number[]; app: number; type?: UserType }>) {

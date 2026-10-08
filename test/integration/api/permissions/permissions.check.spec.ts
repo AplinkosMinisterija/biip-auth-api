@@ -2,6 +2,8 @@
 import { ServiceBroker } from 'moleculer';
 import { ApiHelper, serviceBrokerConfig, testListCountsAndIds } from '../../../helpers/api';
 import { expect, describe, beforeAll, afterAll, it } from '@jest/globals';
+import { User, UserType } from '../../../../services/users.service';
+import { UserGroupRole } from '../../../../services/userGroups.service';
 
 const request = require('supertest');
 
@@ -9,6 +11,10 @@ const broker = new ServiceBroker(serviceBrokerConfig);
 
 const apiHelper = new ApiHelper(broker);
 const apiService = apiHelper.initializeServices();
+
+// Group-admin of `groupAdmin` (which spans the admin AND the fishing app) whose
+// explicit `apps` deliberately leave the fishing app out.
+let adminWithoutFishingApp: User;
 
 const allAccesses = ['*'];
 const noAccesses: Array<any> = [];
@@ -42,6 +48,13 @@ const initialize = async (broker: any) => {
     features: groupAdminInnerPermissionFeatures,
     accesses: groupAdminInnerPermissionAccesses,
   });
+
+  adminWithoutFishingApp = await apiHelper.createUser(
+    'admin.without.fishing.app@test.lt',
+    UserType.ADMIN,
+    [apiHelper.appAdmin.id],
+    [{ id: apiHelper.groupAdmin.id, role: UserGroupRole.ADMIN }],
+  );
 
   return true;
 };
@@ -96,6 +109,28 @@ describe('Test permissions for users', () => {
         .expect(200)
         .expect((res: any) => {
           testListCountsAndIds(res, [apiHelper.admin.id, apiHelper.adminInner.id]);
+        });
+    });
+
+    it('Get users by access skips a group member who does not hold the app', () => {
+      // `groupAdmin` carries permissions for several apps while `user_groups`
+      // stores ONE role per group, so expanding it by role alone hands the
+      // fishing app people who only have the admin app. In production that
+      // mailed every national hunting incident to a fish-stocking-only
+      // account (issue #57).
+      return request(apiService.server)
+        .get(endpointUsersByAccess)
+        .set(apiHelper.getHeaders('', apiHelper.appFishing.apiKey))
+        .send({
+          access: groupAdminPermissionAccesses[1],
+        })
+        .expect(200)
+        .expect((res: any) => {
+          const ids = res.body.rows.map((r: any) => r.id);
+          expect(ids).not.toContain(adminWithoutFishingApp.id);
+          expect(ids).toEqual(
+            expect.arrayContaining([apiHelper.admin.id, apiHelper.adminInner.id]),
+          );
         });
     });
 
