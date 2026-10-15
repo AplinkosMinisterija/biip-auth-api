@@ -355,8 +355,7 @@ export default class GroupsService extends moleculer.Service {
   }
 
   @Action({
-    // Wraps groups.create — mirror its gate. Reachable by name under the gateway's
-    // mappingPolicy:'all', so it must be type-gated like create/update/remove.
+    // Wraps groups.create — mirror its gate (defense in depth; no REST alias).
     types: [EndpointType.ADMIN, EndpointType.SUPER_ADMIN],
   })
   async findOrCreate(ctx: Context<{ companyCode: string }, AppAuthMeta>) {
@@ -380,7 +379,7 @@ export default class GroupsService extends moleculer.Service {
 
   @Action({
     // Mutates a group's app assignment. No HTTP caller (internal usersEvartai
-    // flows only); SUPER_ADMIN-gate against the mappingPolicy:'all' bypass.
+    // flows only); the SUPER_ADMIN gate is defense in depth.
     types: [EndpointType.SUPER_ADMIN],
     params: {
       id: {

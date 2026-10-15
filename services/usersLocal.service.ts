@@ -88,7 +88,7 @@ export interface UserLocal extends BaseModelInterface {
       password: {
         type: 'string',
         min: 8,
-        // hidden: true,
+        hidden: 'byDefault',
         validate: 'validatePassword',
         set({ value, entity }: FieldHookCallback) {
           if (!value) return (entity && entity.password) || '';
@@ -555,11 +555,8 @@ export default class UsersLocalService extends moleculer.Service {
   @Action({
     // Internal-only: the real HTTP delete goes through `users.removeUser`
     // (validateIfAuthorized hook), which delegates here via an internal call.
-    // This action is reachable by name under the gateway's `mappingPolicy: 'all'`
-    // (`POST /api/usersLocal/removeUser`) and has no before-hook, so without a
-    // type gate any authenticated USER could delete an arbitrary user (the inner
-    // `users.remove` call bypasses its own gateway gate). SUPER_ADMIN-gate it;
-    // internal broker callers bypass authorize().
+    // It has no before-hook of its own, so the SUPER_ADMIN gate is kept as defense
+    // in depth; internal broker callers bypass authorize().
     types: [EndpointType.SUPER_ADMIN],
     params: {
       id: {

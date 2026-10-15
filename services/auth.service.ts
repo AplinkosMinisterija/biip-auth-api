@@ -1,7 +1,7 @@
 'use strict';
 
 import moleculer, { Context } from 'moleculer';
-import { Action, Method, Service } from 'moleculer-decorators';
+import { Action, Event, Method, Service } from 'moleculer-decorators';
 import moment from 'moment';
 
 import {
@@ -9,14 +9,31 @@ import {
   generateHashAndSignatureQueryParams,
   generateToken,
   generateUUID,
+  isRefreshToken,
+  isUntypedRefreshToken,
   sendResetPasswordEmail,
+  TokenClaims,
   validateHashAndSignature,
   verifyToken,
 } from '../utils';
 import { AppAuthMeta, AuthStrategy, UserAuthMeta } from './api.service';
 import { App } from './apps.service';
 import { User, UserType } from './users.service';
-import { EndpointType, throwBadRequestError, throwNotFoundError } from '../types';
+import { UserLocal } from './usersLocal.service';
+import {
+  ACCESS_TOKEN_TTL_SECONDS,
+  EndpointType,
+  REFRESH_TOKEN_TTL_SECONDS,
+  REFRESH_TOKEN_TYPE,
+  throwBadRequestError,
+  throwNotFoundError,
+} from '../types';
+
+interface RefreshClaims {
+  id: number;
+  strategy: AuthStrategy;
+  strategyId: number;
+}
 
 @Service({
   name: 'auth',
@@ -170,18 +187,11 @@ export default class AuthService extends moleculer.Service {
     },
   })
   async refreshToken(ctx: Context<{ token: string }, AppAuthMeta>) {
-    const { token } = ctx.params;
-
-    const { id, strategy, strategyId }: any = await ctx.call(
-      'auth.parseToken',
-      { token },
-      { meta: ctx.meta },
-    );
-
-    if (!id) {
+    const claims = await this.verifyRefreshToken(ctx.params.token);
+    if (!claims) {
       return throwNotFoundError('User not found to refresh token.');
     }
-    // TODO: check if refresh token exists
+    const { id, strategy, strategyId } = claims;
 
     const userLoggedIn: User = await this.broker.call('users.resolve', { id });
 
@@ -299,7 +309,17 @@ export default class AuthService extends moleculer.Service {
       this.logger.error('Error resolving token', token, e);
       return {};
     }
-    if (!result || !result.id) return {};
+    if (!result || !result.id || isRefreshToken(result)) return {};
+
+    // The role frozen into the token must still be the user's role: a role change
+    // (or deletion) ends the session, and a token of another kind that merely
+    // shares a numeric id with a user (an app API key) never borrows that user's role.
+    const currentUser: User = await this.broker.call('users.resolve', {
+      id: result.id,
+      fields: ['id', 'type'],
+      populate: [],
+    });
+    if (!currentUser || currentUser.type !== result.type) return {};
 
     await this.broker.call('permissions.validatePermissionToAccessApp', {
       appId: ctx.meta.app.id,
@@ -704,11 +724,59 @@ export default class AuthService extends moleculer.Service {
       strategyId: strategyId,
     };
 
-    const token = await generateToken(tokenData);
+    const token = await generateToken(tokenData, ACCESS_TOKEN_TTL_SECONDS);
     if (!refresh) return { token };
 
-    const refreshToken = await generateToken(tokenData, 60 * 60 * 24 * 30); // for 30 days
+    const refreshToken = await generateToken(
+      { ...tokenData, typ: REFRESH_TOKEN_TYPE },
+      REFRESH_TOKEN_TTL_SECONDS,
+    );
     return { token, refreshToken };
+  }
+
+  @Method
+  async verifyRefreshToken(token: string): Promise<(TokenClaims & RefreshClaims) | undefined> {
+    let claims: (TokenClaims & Partial<RefreshClaims>) | undefined;
+    try {
+      claims = await verifyToken(token);
+    } catch {
+      return;
+    }
+    if (!claims?.id || !claims.strategy) return;
+    if (!isRefreshToken(claims) && !isUntypedRefreshToken(claims)) return;
+    if (await this.isRevokedByPasswordChange(claims)) return;
+    return claims as TokenClaims & RefreshClaims;
+  }
+
+  // A password change stops every LOCAL session issued before it from being
+  // renewed. The access token in use keeps working until it expires, because
+  // clients keep calling /users/me with it right after changing the password.
+  @Method
+  async isRevokedByPasswordChange(claims: TokenClaims & Partial<RefreshClaims>) {
+    if (claims.strategy !== AuthStrategy.LOCAL || !claims.strategyId || !claims.iat) return false;
+
+    const userLocal: UserLocal = await this.broker.call('usersLocal.resolve', {
+      id: claims.strategyId,
+    });
+    if (!userLocal?.lastPasswordChangeAt) return false;
+
+    const changedAtSeconds = Math.floor(new Date(userLocal.lastPasswordChangeAt).getTime() / 1000);
+    return claims.iat < changedAtSeconds;
+  }
+
+  // parseToken caches the caller's role for up to its TTL; drop it when a role
+  // actually changes or a user is deleted, so a demotion takes effect at once.
+  // Other user updates (e.g. names refreshed on every eVartai login) must not
+  // flush the whole cache.
+  @Event()
+  async 'users.updated'(ctx: Context<{ data: User; oldData?: User }>) {
+    if (ctx.params.oldData?.type === ctx.params.data?.type) return;
+    await this.broker.cacher?.clean('auth.parseToken**');
+  }
+
+  @Event()
+  async 'users.removed'() {
+    await this.broker.cacher?.clean('auth.parseToken**');
   }
 
   created() {

@@ -2,6 +2,8 @@
 import { ServiceBroker } from 'moleculer';
 import { ApiHelper, serviceBrokerConfig } from '../../helpers/api';
 import { expect, describe, beforeAll, afterAll, it, jest } from '@jest/globals';
+import jwt from 'jsonwebtoken';
+import { UserType } from '../../../services/users.service';
 
 const request = require('supertest');
 
@@ -179,74 +181,40 @@ describe('Security hardening', () => {
     });
   });
 
-  // mappingPolicy:'all' on the /api route means an action with no REST alias is
-  // still reachable by name (POST /api/<service>/<action>). rest:null does NOT
-  // protect it — only a `types` gate does. These assert the raw mutating actions
-  // reject a non-privileged caller via that direct-mapping path.
-  describe('raw action surface is type-gated (mappingPolicy bypass)', () => {
-    // Use adminToken (a real UserType.ADMIN) — these actions are SUPER_ADMIN-only,
-    // so blocking an ADMIN proves the gate, not just the absence of privilege.
-    it('an ADMIN cannot self-grant via POST /api/permissions/create', () => {
-      return request(apiService.server)
-        .post('/api/permissions/create')
-        .set(apiHelper.getHeaders(apiHelper.adminToken, apiHelper.appFishing.apiKey))
-        .send({ group: apiHelper.groupFishersCompany.id, accesses: ['*'], role: 'ADMIN' })
-        .expect((res: any) => {
-          expect([401, 403]).toContain(res.status);
-        });
-    });
+  // The /api route uses mappingPolicy 'restrict': only REST aliases resolve.
+  // Raw DB CRUD and internal helper actions must not be reachable by name
+  // (POST /api/<service>/<action>) — none of them carries a `types` gate.
+  describe('raw actions are not reachable by name', () => {
+    const byNameCalls: Array<[string, Record<string, unknown>]> = [
+      ['/api/permissions/create', { accesses: ['*'], role: 'ADMIN' }],
+      ['/api/users/create', { firstName: 'X', lastName: 'Y', email: 'bypass.create@am.lt' }],
+      ['/api/users/assignGroups', { id: 1, groups: [{ id: 1, role: 'ADMIN' }] }],
+      ['/api/users/find', {}],
+      ['/api/users/getAuthUser', { id: 1, type: 'LOCAL', typeId: 1 }],
+      ['/api/users/removeAllEntities', {}],
+      ['/api/usersLocal/update', { id: 1, password: 'Bypass123!' }],
+      ['/api/usersLocal/find', {}],
+      ['/api/usersLocal/findOrCreate', { email: 'bypass.foc@am.lt', type: 'SUPER_ADMIN' }],
+      ['/api/usersLocal/validateLogin', { email: 'bypass@am.lt', password: 'x' }],
+      ['/api/usersLocal/removeUser', { id: 999999 }],
+      ['/api/usersEvartai/find', {}],
+      ['/api/usersEvartai/removeUser', { id: 999999 }],
+      ['/api/userGroups/create', { user: 1, group: 1, role: 'ADMIN' }],
+    ];
 
-    it('an ADMIN cannot create a user via POST /api/users/create', () => {
+    it.each(byNameCalls)('POST %s is not routed', (path, body) => {
       return request(apiService.server)
-        .post('/api/users/create')
+        .post(path)
         .set(apiHelper.getHeaders(apiHelper.adminToken, apiHelper.appFishing.apiKey))
-        .send({ firstName: 'X', lastName: 'Y', email: 'bypass.create@am.lt' })
-        .expect((res: any) => {
-          expect([401, 403]).toContain(res.status);
-        });
-    });
-
-    it('an ADMIN cannot grant group membership via POST /api/users/assignGroups', () => {
-      return request(apiService.server)
-        .post('/api/users/assignGroups')
-        .set(apiHelper.getHeaders(apiHelper.adminToken, apiHelper.appFishing.apiKey))
-        .send({ id: 1, groups: [{ id: apiHelper.groupFishersCompany.id, role: 'ADMIN' }] })
-        .expect((res: any) => {
-          expect([401, 403]).toContain(res.status);
-        });
+        .send(body)
+        .expect(404)
+        .expect((res: any) => expect(res.body.name).toEqual('NotFoundError'));
     });
 
     it('a regular user cannot delete a group via DELETE /api/groups/:id', () => {
       return request(apiService.server)
         .delete('/api/groups/999999')
         .set(apiHelper.getHeaders(apiHelper.fisherUserToken, apiHelper.appFishing.apiKey))
-        .expect((res: any) => {
-          expect([401, 403]).toContain(res.status);
-        });
-    });
-
-    // The user-deletion analog of the groups.removeGroup gate above. The real
-    // HTTP delete is `users.removeUser` (validateIfAuthorized hook); these inner
-    // sub-service actions are internal-only but reachable by name via the same
-    // mappingPolicy:'all' direct-mapping, with no before-hook. Use adminToken (a
-    // real ADMIN) — they are SUPER_ADMIN-gated, so blocking an ADMIN proves the
-    // gate. A non-existent id keeps the assertion non-destructive: gate present →
-    // 401/403; gate removed → the action would run and 404 (still fails here).
-    it('an ADMIN cannot delete a user via POST /api/usersLocal/removeUser', () => {
-      return request(apiService.server)
-        .post('/api/usersLocal/removeUser')
-        .set(apiHelper.getHeaders(apiHelper.adminToken, apiHelper.appFishing.apiKey))
-        .send({ id: 999999 })
-        .expect((res: any) => {
-          expect([401, 403]).toContain(res.status);
-        });
-    });
-
-    it('an ADMIN cannot revoke app access via POST /api/usersEvartai/removeUser', () => {
-      return request(apiService.server)
-        .post('/api/usersEvartai/removeUser')
-        .set(apiHelper.getHeaders(apiHelper.adminToken, apiHelper.appFishing.apiKey))
-        .send({ id: 999999 })
         .expect((res: any) => {
           expect([401, 403]).toContain(res.status);
         });
@@ -398,6 +366,137 @@ describe('Security hardening', () => {
       ).expect((res: any) => {
         expect([401, 403]).toContain(res.status);
       });
+    });
+  });
+  // A tenant app key may only write memberships of its own app's groups;
+  // administrators working through an admin-type app manage every app's groups.
+  describe('userGroups.assign is confined to the calling app', () => {
+    const assign = (groupId: number, token: string, apiKey?: string) =>
+      request(apiService.server)
+        .post(`/api/users/${apiHelper.fisherUser.id}/groups/${groupId}/assign`)
+        .set(apiHelper.getHeaders(token, apiKey))
+        .send({ role: 'ADMIN' });
+
+    it('a tenant app key cannot assign into another app group', () => {
+      return assign(
+        apiHelper.groupHuntersCompany.id,
+        apiHelper.fisherUserToken,
+        apiHelper.appFishing.apiKey,
+      )
+        .expect(403)
+        .expect((res: any) => expect(res.body.type).toEqual('AUTH_UNAUTHORIZED_GROUP'));
+    });
+
+    it('a tenant app key can assign into its own app group', () => {
+      return assign(
+        apiHelper.groupFishersCompany.id,
+        apiHelper.fisherUserToken,
+        apiHelper.appFishing.apiKey,
+      ).expect(200);
+    });
+
+    it('an administrator in the admin app can assign into any app group', async () => {
+      await assign(apiHelper.groupHuntersCompany.id, apiHelper.superAdminToken).expect(200);
+
+      const membership: any = await broker.call('userGroups.findOne', {
+        query: { user: apiHelper.fisherUser.id, group: apiHelper.groupHuntersCompany.id },
+      });
+      await broker.call('userGroups.remove', { id: membership.id });
+    });
+
+    it('a plain user in the admin app cannot assign into another app group', async () => {
+      const email = 'admin.app.user@am.lt';
+      await apiHelper.createUser(email, UserType.USER, [apiHelper.appAdmin.id]);
+      const { token } = await apiHelper.loginUser(email, apiHelper.goodPassword);
+
+      return assign(apiHelper.groupHuntersCompany.id, token)
+        .expect(403)
+        .expect((res: any) => expect(res.body.type).toEqual('AUTH_UNAUTHORIZED_GROUP'));
+    });
+  });
+
+  describe('token lifecycle', () => {
+    const me = (token: string, apiKey?: string) =>
+      request(apiService.server).get('/api/users/me').set(apiHelper.getHeaders(token, apiKey));
+    const refresh = (token: string, apiKey?: string) =>
+      request(apiService.server)
+        .post('/auth/refresh')
+        .set(apiHelper.getHeaders(null, apiKey))
+        .send({ token });
+
+    let tokens: { token: string; refreshToken: string };
+    beforeAll(async () => {
+      tokens = await apiHelper.loginUser(apiHelper.goodEmail, apiHelper.goodPassword, true);
+    });
+
+    it('a refresh token is not accepted as a bearer token', () => {
+      return me(tokens.refreshToken).expect(401);
+    });
+
+    it('an access token cannot be exchanged for new tokens', () => {
+      return refresh(tokens.token)
+        .expect(404)
+        .expect((res: any) => expect(res.body.type).toEqual('NOT_FOUND'));
+    });
+
+    it('an untyped refresh token can still be exchanged', () => {
+      const { iat, exp, ...claims } = jwt.decode(tokens.token) as Record<string, unknown>;
+      const untypedRefreshToken = jwt.sign(claims, String(process.env.JWT_SECRET), {
+        expiresIn: 60 * 60 * 24 * 30,
+      });
+
+      return refresh(untypedRefreshToken).expect(200);
+    });
+
+    it('a token whose role differs from the user it names is rejected', () => {
+      // Shaped like a USERS-type app key whose app id collides with an admin's id.
+      const appKeyLike = jwt.sign(
+        { id: apiHelper.admin.id, type: 'USERS', name: 'Users', strategy: 'LOCAL' },
+        String(process.env.JWT_SECRET),
+        { expiresIn: 60 * 60 * 24 * 365 },
+      );
+
+      return request(apiService.server)
+        .get('/api/permissions')
+        .set(apiHelper.getHeaders(appKeyLike))
+        .expect(401);
+    });
+
+    it('a demoted admin loses admin-only endpoints at once', async () => {
+      const email = 'demoted.admin@am.lt';
+      const admin = await apiHelper.createUser(email, UserType.ADMIN, [apiHelper.appAdmin.id]);
+      const { token } = await apiHelper.loginUser(email, apiHelper.goodPassword);
+      const listPermissions = () =>
+        request(apiService.server).get('/api/permissions').set(apiHelper.getHeaders(token));
+
+      await listPermissions().expect(200);
+      await broker.call('users.update', { id: admin.id, type: UserType.USER });
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      await listPermissions().expect(401);
+    });
+
+    it('a password change stops earlier sessions from being renewed', async () => {
+      const email = 'revoked.session@am.lt';
+      const user = await apiHelper.createUser(email, UserType.USER, [apiHelper.appFishing.id]);
+      const old = await apiHelper.loginUser(
+        email,
+        apiHelper.goodPassword,
+        true,
+        apiHelper.appFishing,
+      );
+      // `iat` has one-second resolution; a token from the same second survives.
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+
+      const userLocal: any = await broker.call('usersLocal.findOne', { query: { user: user.id } });
+      const newPassword = 'N3wPassword!';
+      await broker.call('usersLocal.update', { id: userLocal.id, password: newPassword });
+
+      await refresh(old.refreshToken, apiHelper.appFishing.apiKey).expect(404);
+      await me(old.token, apiHelper.appFishing.apiKey).expect(200);
+
+      const fresh = await apiHelper.loginUser(email, newPassword, true, apiHelper.appFishing);
+      await refresh(fresh.refreshToken, apiHelper.appFishing.apiKey).expect(200);
     });
   });
 });

@@ -1,9 +1,10 @@
 'use strict';
 
 import moleculer, { Context } from 'moleculer';
-import { Action, Service } from 'moleculer-decorators';
+import { Action, Method, Service } from 'moleculer-decorators';
 
 import { AppAuthMeta, UserAuthMeta } from './api.service';
+import { AppType } from './apps.service';
 import DbConnection from '../mixins/database.mixin';
 import {
   COMMON_FIELDS,
@@ -13,7 +14,7 @@ import {
   EndpointType,
   throwNotFoundError,
 } from '../types';
-import { User } from './users.service';
+import { User, UserType } from './users.service';
 import { Group } from './groups.service';
 import { Permission } from './permissions.service';
 
@@ -283,15 +284,11 @@ export default class UserGroupsService extends moleculer.Service {
       path: '/assign',
       basePath: '/users/:user/groups/:group',
     },
-    // Unlike `unassign` (which authorizes by group-admin membership in its body),
-    // `assign` keeps a type gate widened with APP. It HAS in-process broker callers
-    // — usersEvartai company auto-join / defaultGroupId on login, and
-    // users.assignNewGroupsToUser — where the subject is not yet a group-admin, so
-    // a body ownership check would 401 legitimate logins. Internal broker calls
-    // bypass the gateway (and thus this gate) entirely; APP only widens the HTTP
-    // path so the tenant apps' service-to-service assignToGroup (valid app key,
-    // acting user is UserType.USER) is allowed while a browser (no app key) is not.
-    // The calling app authorizes the membership change on its side before calling.
+    // APP lets the tenant apps' service-to-service assignToGroup through (acting
+    // user is UserType.USER, often not a member of the target group, e.g. the
+    // zuvinimas freelancer group). The tenant authorizes membership on its side;
+    // auth only enforces that the group belongs to the calling app, so one app's
+    // key cannot write into another app's groups.
     types: [EndpointType.ADMIN, EndpointType.SUPER_ADMIN, EndpointType.APP],
     params: {
       user: {
@@ -310,8 +307,12 @@ export default class UserGroupsService extends moleculer.Service {
       },
     },
   })
-  async assign(ctx: Context<{ user: number; group: number; role: UserGroupRole }>) {
+  async assign(
+    ctx: Context<{ user: number; group: number; role: UserGroupRole }, AppAuthMeta & UserAuthMeta>,
+  ) {
     const { user, group, role } = ctx.params;
+
+    await this.assertGroupInCallingApp(ctx, group);
 
     const userGroup: UserGroup = await ctx.call('userGroups.findOne', {
       query: { user, group },
@@ -388,5 +389,27 @@ export default class UserGroupsService extends moleculer.Service {
     }
 
     return { success: true };
+  }
+
+  // Internal broker callers (seed, fixtures) carry no app, and administrators
+  // working through an admin-type app manage the groups of every app; any other
+  // caller is confined to the groups of the calling app.
+  @Method
+  async assertGroupInCallingApp(ctx: Context<unknown, AppAuthMeta & UserAuthMeta>, group: number) {
+    const { app, user } = ctx.meta;
+    if (!app) return;
+
+    const isAdminApp = Object.values(AppType).includes(app.type);
+    const isAdminUser = !!user && [UserType.ADMIN, UserType.SUPER_ADMIN].includes(user.type);
+    if (isAdminApp && isAdminUser) return;
+
+    const groupAppIds: number[] = await ctx.call('inheritedGroupApps.getAppsByGroup', { group });
+    if (!groupAppIds.map(Number).includes(Number(app.id))) {
+      throw new moleculer.Errors.MoleculerClientError(
+        `Group '${group}' does not belong to the calling app.`,
+        403,
+        'AUTH_UNAUTHORIZED_GROUP',
+      );
+    }
   }
 }
