@@ -201,18 +201,26 @@ describe('Granting permissions', () => {
     });
 
     it("a group grant without a role never rewrites a role's row", async () => {
+      const freshGroup: any = await broker.call('groups.create', {
+        name: 'Role row first',
+        parent: apiHelper.groupAdmin.id,
+      });
       const roleRow: any = await broker.call('permissions.create', {
-        group: apiHelper.groupAdminInner2.id,
+        group: freshGroup.id,
         app: apiHelper.appFishing.id,
         role: 'USER',
         features: [USER_ROW_FEATURE],
       });
 
       await grant(apiHelper.adminToken, {
-        group: apiHelper.groupAdminInner2.id,
+        group: freshGroup.id,
         app: apiHelper.appFishing.id,
         features: [SOME_FEATURE],
-      }).expect(200);
+      })
+        .expect(200)
+        .expect((res: any) => {
+          expect(res.body.id).not.toEqual(roleRow.id);
+        });
 
       const unchanged: any = await broker.call('permissions.resolve', { id: roleRow.id });
       expect(unchanged.features).toEqual([USER_ROW_FEATURE]);
@@ -253,14 +261,19 @@ describe('Granting permissions', () => {
       }).expect(200);
     });
 
-    it('a module app can assign its own access to one of its companies (tenant flow)', () => {
+    it('a module app key does not let an admin hand a company an access he lacks', () => {
+      // He could join the company afterwards through user editing.
       return modify(
         apiHelper.adminToken,
-        {
-          group: apiHelper.groupFishersCompany.id,
-          access: OTHER_ACCESS,
-          action: 'assign',
-        },
+        { group: apiHelper.groupFishersCompany.id, access: OTHER_ACCESS, action: 'assign' },
+        apiHelper.appFishing.apiKey,
+      ).expect(expectForbidden(PermissionGrantErrorType.EXCEEDS_OWN));
+    });
+
+    it('a super admin still assigns a module access to a company', () => {
+      return modify(
+        apiHelper.superAdminToken,
+        { group: apiHelper.groupFishersCompany.id, access: OTHER_ACCESS, action: 'assign' },
         apiHelper.appFishing.apiKey,
       )
         .expect(200)

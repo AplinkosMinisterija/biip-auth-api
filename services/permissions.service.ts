@@ -528,21 +528,14 @@ export default class PermissionsService extends moleculer.Service {
 
     const isRestricted = this.isRestrictedGranter(ctx.meta.user);
 
+    // No exception for a module's own companies: an admin may join a company afterwards
+    // (user editing lets him), so an access he could hand a company he could hand himself.
+    // A SUPER_ADMIN still assigns anything, e.g. a fishing company's INVESTIGATOR access.
     if (isRestricted) {
       await this.assertCanEditGroup(ctx, group);
-      const isTenantFlow =
-        !canUseCustomAppId && (await this.isOthersCompanyOfApp(ctx, group, currentApp.id));
-
-      if (!isTenantFlow) {
-        await this.assertHoldsApp(ctx.meta.user, appId);
-        if (action === PermissionAction.ASSIGN) {
-          await this.assertGrantWithinOwn(ctx.meta.user, appId, { accesses: [access] });
-        }
-      } else if (access === PERMISSION_WILDCARD) {
-        throwForbiddenError(
-          'Cannot grant every access to a company.',
-          PermissionGrantErrorType.EXCEEDS_OWN,
-        );
+      await this.assertHoldsApp(ctx.meta.user, appId);
+      if (action === PermissionAction.ASSIGN) {
+        await this.assertGrantWithinOwn(ctx.meta.user, appId, { accesses: [access] });
       }
     }
 
@@ -1258,28 +1251,6 @@ export default class PermissionsService extends moleculer.Service {
       `Not authorized to change permissions of group '${groupId}'.`,
       PermissionGrantErrorType.GROUP,
     );
-  }
-
-  // A module's tenant flow (e.g. a fishing company becoming an investigator): the module, with
-  // its own app key, assigns its own accesses to one of its companies. The acting admin need
-  // not hold them, but he must not belong to that company or to any group below it.
-  @Method
-  async isOthersCompanyOfApp(
-    ctx: Context<unknown, UserAuthMeta>,
-    groupId: number,
-    appId: number,
-  ): Promise<boolean> {
-    const companyIds = await this.getCompanyIdsByApp(appId);
-    if (!companyIds.some((id) => Number(id) === Number(groupId))) return false;
-
-    // Membership of any group below the company inherits its permissions too.
-    const childIds: Array<number | string> = await this.broker.call('groups.getGroupChildrenIds', {
-      id: groupId,
-    });
-    const membership: UserGroup | null = await this.broker.call('userGroups.findOne', {
-      query: { user: ctx.meta.user.id, group: { $in: [groupId, ...(childIds ?? [])] } },
-    });
-    return !membership;
   }
 
   @Method
