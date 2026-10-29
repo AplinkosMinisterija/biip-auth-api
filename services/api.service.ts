@@ -169,8 +169,16 @@ function verifyApiKey(
           },
         },
 
-        // Mapping policy setting. More info: https://moleculer.services/docs/0.14/moleculer-web.html#Mapping-policy
-        mappingPolicy: 'all', // Available values: "all", "restrict"
+        /*
+         * Only aliases are served: the explicit ones above and those autoAliases builds from each
+         * action's `rest`. Under 'all' any action was reachable by name, and the database mixin
+         * gives every service actions with no gate of their own (replace, removeAllEntities,
+         * find, list of usersLocal with password hashes, groups.remove without the ownership hook
+         * removeGroup has, userGroups.moveToGroup, usersLocal.validateLogin). Every HTTP client
+         * (biip-auth-nodejs, biip-admin-api) calls aliases only. Same change as
+         * biip-medziokle-api #491.
+         */
+        mappingPolicy: 'restrict',
 
         // Enable/disable logging
         logging: true,

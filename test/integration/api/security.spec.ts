@@ -179,10 +179,9 @@ describe('Security hardening', () => {
     });
   });
 
-  // mappingPolicy:'all' on the /api route means an action with no REST alias is
-  // still reachable by name (POST /api/<service>/<action>). rest:null does NOT
-  // protect it — only a `types` gate does. These assert the raw mutating actions
-  // reject a non-privileged caller via that direct-mapping path.
+  // The /api route used mappingPolicy:'all', so an action with no REST alias was
+  // reachable by name (POST /api/<service>/<action>). It is 'restrict' now (404), and
+  // the `types` gates stay as a second line (401/403).
   describe('raw action surface is type-gated (mappingPolicy bypass)', () => {
     // Use adminToken (a real UserType.ADMIN) — these actions are SUPER_ADMIN-only,
     // so blocking an ADMIN proves the gate, not just the absence of privilege.
@@ -192,7 +191,7 @@ describe('Security hardening', () => {
         .set(apiHelper.getHeaders(apiHelper.adminToken, apiHelper.appFishing.apiKey))
         .send({ group: apiHelper.groupFishersCompany.id, accesses: ['*'], role: 'ADMIN' })
         .expect((res: any) => {
-          expect([401, 403]).toContain(res.status);
+          expect([401, 403, 404]).toContain(res.status);
         });
     });
 
@@ -202,7 +201,7 @@ describe('Security hardening', () => {
         .set(apiHelper.getHeaders(apiHelper.adminToken, apiHelper.appFishing.apiKey))
         .send({ firstName: 'X', lastName: 'Y', email: 'bypass.create@am.lt' })
         .expect((res: any) => {
-          expect([401, 403]).toContain(res.status);
+          expect([401, 403, 404]).toContain(res.status);
         });
     });
 
@@ -212,7 +211,7 @@ describe('Security hardening', () => {
         .set(apiHelper.getHeaders(apiHelper.adminToken, apiHelper.appFishing.apiKey))
         .send({ id: 1, groups: [{ id: apiHelper.groupFishersCompany.id, role: 'ADMIN' }] })
         .expect((res: any) => {
-          expect([401, 403]).toContain(res.status);
+          expect([401, 403, 404]).toContain(res.status);
         });
     });
 
@@ -221,7 +220,7 @@ describe('Security hardening', () => {
         .delete('/api/groups/999999')
         .set(apiHelper.getHeaders(apiHelper.fisherUserToken, apiHelper.appFishing.apiKey))
         .expect((res: any) => {
-          expect([401, 403]).toContain(res.status);
+          expect([401, 403, 404]).toContain(res.status);
         });
     });
 
@@ -238,7 +237,7 @@ describe('Security hardening', () => {
         .set(apiHelper.getHeaders(apiHelper.adminToken, apiHelper.appFishing.apiKey))
         .send({ id: 999999 })
         .expect((res: any) => {
-          expect([401, 403]).toContain(res.status);
+          expect([401, 403, 404]).toContain(res.status);
         });
     });
 
@@ -248,7 +247,7 @@ describe('Security hardening', () => {
         .set(apiHelper.getHeaders(apiHelper.adminToken, apiHelper.appFishing.apiKey))
         .send({ id: 999999 })
         .expect((res: any) => {
-          expect([401, 403]).toContain(res.status);
+          expect([401, 403, 404]).toContain(res.status);
         });
     });
   });
@@ -466,11 +465,20 @@ describe('Security hardening', () => {
       post(path, body).expect(expectRouteNotFound),
     );
 
-    it('typed CRUD is still answered by its own gate', () => {
-      return post('/api/permissions/create', { group: 1, accesses: ['*'] }).expect((res: any) => {
-        expect([401, 403]).toContain(res.status);
-      });
+    it('a typed alias is still answered by its own gate', () => {
+      return post('/api/groups', { name: 'X', apps: [apiHelper.appFishing.id] }).expect(401);
     });
+
+    it.each([
+      ['/api/usersLocal/list', {}],
+      ['/api/usersLocal/get', { id: 1 }],
+      ['/api/usersLocal/validateLogin', { email: 'user.fisher@am.lt', password: 'x' }],
+      ['/api/groups/remove', { id: 1 }],
+      ['/api/userGroups/moveToGroup', { source: 1, dist: 2 }],
+      ['/api/groups/findOrCreate', { name: 'X' }],
+    ])('%s is not served by name', (path: string, body: any) =>
+      post(path, body, apiHelper.adminToken).expect(404),
+    );
   });
   // The knex adapter hands `$raw` (query/filter) to whereRaw and `&` sort entries to
   // orderByRaw. Before the gateway refused them, `POST /api/users/find` with a `$raw` UPDATE
@@ -505,6 +513,19 @@ describe('Security hardening', () => {
     it('a nested $raw in filter is refused', () => {
       return asFisher(request(apiService.server).get('/api/groups'))
         .query({ filter: JSON.stringify({ name: { $in: [{ $raw: '1=1' }] } }) })
+        .expect(422);
+    });
+
+    it('a doubly encoded $raw query is refused', () => {
+      const doublyEncoded = JSON.stringify(JSON.stringify({ $raw: '1=1' }));
+      return asFisher(request(apiService.server).get('/api/users'))
+        .query({ query: doublyEncoded })
+        .expect(422);
+    });
+
+    it('$raw in any other parameter is refused', () => {
+      return asFisher(request(apiService.server).post('/api/groups'))
+        .send({ name: { $raw: '1=1' }, apps: [apiHelper.appFishing.id] })
         .expect(422);
     });
 
