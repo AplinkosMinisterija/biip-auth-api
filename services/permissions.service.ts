@@ -11,7 +11,10 @@ import {
   COMMON_SCOPES,
   DISABLE_REST_ACTIONS,
   EndpointType,
+  PERMISSION_WILDCARD,
+  PermissionGrantErrorType,
   throwBadRequestError,
+  throwForbiddenError,
   throwNotFoundError,
   throwUnauthorizedError,
 } from '../types';
@@ -333,24 +336,17 @@ export default class PermissionsService extends moleculer.Service {
     },
   })
   async getUserMunicipalities(ctx: Context<{ id: number }>) {
-    const { id } = ctx.params;
-    const user: User = await ctx.call('users.resolve', {
-      id,
-      populate: 'permissions',
-    });
+    return this.computeUserMunicipalities(ctx, ctx.params.id);
+  }
+
+  // Uncached, for decisions to grant; the action above caches it for everyone else.
+  @Method
+  async computeUserMunicipalities(ctx: Context, id: number) {
+    const user: User = await ctx.call('users.resolve', { id });
 
     if (!user) return;
 
-    const isSuperAdmin = user.type === UserType.SUPER_ADMIN;
-    const usersApp: App = await ctx.call('apps.getUsersApp');
-    const userUsersAppPermissions: any = user.permissions?.[usersApp.type];
-    const hasManageMunicipalityPermission = userUsersAppPermissions
-      ? userUsersAppPermissions.accesses.some(
-          (i: any) => i === '*' || i === UsersAppAccesses.MANAGE_MUNICIPALITIES,
-        )
-      : false;
-
-    if (isSuperAdmin || hasManageMunicipalityPermission) {
+    if (await this.managesAllMunicipalities(user.id)) {
       // all municipalities for super admin
       const municipalities: any = await ctx.call('permissions.listMunicipalities');
       return municipalities.rows.map((r: any) => r.id);
@@ -423,14 +419,17 @@ export default class PermissionsService extends moleculer.Service {
     },
   })
   async findOrCreate(
-    ctx: Context<{
-      user: number;
-      group: number;
-      app: number;
-      role: string;
-      accesses: Array<string>;
-      features: Array<string>;
-    }>,
+    ctx: Context<
+      {
+        user: number;
+        group: number;
+        app: number;
+        role: string;
+        accesses: Array<string>;
+        features: Array<string>;
+      },
+      AppAuthMeta & UserAuthMeta
+    >,
   ) {
     const { user, group, app, role, accesses, features } = ctx.params;
 
@@ -442,15 +441,50 @@ export default class PermissionsService extends moleculer.Service {
       throwBadRequestError('Group or/and user should be passed.');
     }
 
+    const isRestricted = this.isRestrictedGranter(ctx.meta.user);
+
+    if (isRestricted && user) {
+      throwForbiddenError(
+        'Only a super admin can set user-level permissions.',
+        PermissionGrantErrorType.USER_LEVEL,
+      );
+    }
+
     if (user) query.user = user;
     if (group) query.group = group;
     if (role) query.role = role;
+
+    // A restricted caller changes exactly the group row he names: never a user-level row that
+    // shares the group, nor a row of another role.
+    if (isRestricted) {
+      query.user = { $exists: false };
+      query.role = role || { $exists: false };
+    }
 
     const permission: Permission = await ctx.call('permissions.findOne', {
       query,
     });
 
-    const data = { ...query, accesses, features };
+    if (isRestricted) {
+      await this.assertCanEditGroup(ctx, group);
+      await this.assertHoldsApp(ctx.meta.user, app);
+      // An omitted features list leaves an existing row's features as they are; a new row
+      // gets an empty list, which reads as all features.
+      const changedFeatures = features ?? (permission?.id ? undefined : []);
+      await this.assertGrantWithinOwn(ctx.meta.user, app, {
+        accesses,
+        features: changedFeatures,
+      });
+    }
+
+    const data = {
+      app,
+      ...(user && { user }),
+      ...(group && { group }),
+      ...(role && { role }),
+      accesses,
+      features,
+    };
     if (permission && permission.id) {
       return ctx.call('permissions.update', {
         id: permission.id,
@@ -479,7 +513,7 @@ export default class PermissionsService extends moleculer.Service {
         access: string;
         action: PermissionAction;
       },
-      AppAuthMeta
+      AppAuthMeta & UserAuthMeta
     >,
   ) {
     const { group, app, access, action } = ctx.params;
@@ -492,8 +526,25 @@ export default class PermissionsService extends moleculer.Service {
       throwBadRequestError('App ID is missing or invalid.');
     }
 
+    const isRestricted = this.isRestrictedGranter(ctx.meta.user);
+
+    // No exception for a module's own companies: an admin may join a company afterwards
+    // (user editing lets him), so an access he could hand a company he could hand himself.
+    // A SUPER_ADMIN still assigns anything, e.g. a fishing company's INVESTIGATOR access.
+    if (isRestricted) {
+      await this.assertCanEditGroup(ctx, group);
+      await this.assertHoldsApp(ctx.meta.user, appId);
+      if (action === PermissionAction.ASSIGN) {
+        await this.assertGrantWithinOwn(ctx.meta.user, appId, { accesses: [access] });
+      }
+    }
+
     const permission: Permission = await ctx.call('permissions.findOne', {
-      query: { group, app: appId },
+      query: {
+        group,
+        app: appId,
+        ...(isRestricted && { user: { $exists: false }, role: { $exists: false } }),
+      },
     });
 
     if (action === PermissionAction.ASSIGN) {
@@ -775,11 +826,19 @@ export default class PermissionsService extends moleculer.Service {
       },
     },
   })
-  async createWithMunicipalities(ctx: Context<{ group: number; municipalities: Array<string> }>) {
+  async createWithMunicipalities(
+    ctx: Context<{ group: number; municipalities: Array<string> }, AppAuthMeta & UserAuthMeta>,
+  ) {
+    if (this.isRestrictedGranter(ctx.meta.user)) {
+      await this.assertCanEditGroup(ctx, ctx.params.group);
+      await this.assertMunicipalitiesWithinOwn(ctx, ctx.params.municipalities);
+    }
+
     const permission: Permission = await ctx.call('permissions.findOne', {
       query: {
         group: ctx.params.group,
         municipalities: { $exists: true },
+        ...(this.isRestrictedGranter(ctx.meta.user) && { user: { $exists: false } }),
       },
     });
 
@@ -906,6 +965,16 @@ export default class PermissionsService extends moleculer.Service {
     const permissions = (await this.broker.cacher?.get(redisKey)) as Promise<PermissionType | null>;
     if (permissions) return permissions;
 
+    const result = await this.computePermissionsByAppAndUser(app, user);
+
+    await this.broker.cacher.set(redisKey, result);
+    return result;
+  }
+
+  // Uncached: a read that started before a revocation can repopulate the cache with the old
+  // rights, so a decision to grant must not trust it.
+  @Method
+  async computePermissionsByAppAndUser(app: App, user: User): Promise<PermissionType> {
     const generatePermissionResult = (features?: Array<string>, accesses?: Array<string>) => {
       return {
         [PermissionTypeEnum.ACCESSES]: accesses && accesses.length ? accesses : [],
@@ -1092,10 +1161,7 @@ export default class PermissionsService extends moleculer.Service {
       );
     }
 
-    const result = generatePermissionResult(features, accesses);
-
-    await this.broker.cacher.set(redisKey, result);
-    return result;
+    return generatePermissionResult(features, accesses);
   }
 
   @Method
@@ -1145,6 +1211,157 @@ export default class PermissionsService extends moleculer.Service {
     }
 
     return [...usersSet];
+  }
+
+  /*
+   * Permission writes used to check only that the caller was ADMIN or SUPER_ADMIN, so any of
+   * the ~290 ADMIN users could give anyone, themselves included, any access in any app. An
+   * ADMIN now edits only groups he administers, only in apps he holds, and grants nothing he
+   * does not hold himself. A SUPER_ADMIN, and internal broker calls (no user), are unchanged.
+   */
+  @Method
+  isRestrictedGranter(user?: User): boolean {
+    return !!user && user.type !== UserType.SUPER_ADMIN;
+  }
+
+  // The rule that lets him create or edit the group (groups.service `hasPermissionToAccess`),
+  // plus every group he is group-ADMIN of.
+  @Method
+  async assertCanEditGroup(ctx: Context<unknown, AppAuthMeta & UserAuthMeta>, groupId: number) {
+    const administeredGroupIds = await this.getVisibleGroupsByUser(
+      ctx.meta.user.id,
+      UserGroupRole.ADMIN,
+    );
+    if (administeredGroupIds.some((id) => Number(id) === Number(groupId))) return;
+
+    const editableGroupIds: Array<number | string> = await ctx.call(
+      'permissions.getVisibleGroupsIds',
+      { edit: true },
+      { meta: ctx.meta },
+    );
+    // A group created under an editable parent (groups.service `validateIfCanBeCreated`)
+    // counts as editable too, so creating it and setting its municipalities both succeed.
+    const groupAndAncestorIds = await this.getGroupAndAncestorIds(groupId);
+    const isEditable = groupAndAncestorIds.some((id) =>
+      editableGroupIds?.some((editableId) => Number(editableId) === id),
+    );
+    if (isEditable) return;
+
+    throwForbiddenError(
+      `Not authorized to change permissions of group '${groupId}'.`,
+      PermissionGrantErrorType.GROUP,
+    );
+  }
+
+  @Method
+  async getGroupAndAncestorIds(groupId: number): Promise<Array<number>> {
+    const ids: Array<number> = [];
+    let group: Group | null = await this.broker.call('groups.getGroupWithParents', { id: groupId });
+
+    while (group?.id) {
+      ids.push(Number(group.id));
+      group = typeof group.parent === 'object' ? (group.parent as Group) : null;
+    }
+    return ids;
+  }
+
+  @Method
+  async assertHoldsApp(user: User, appId: number) {
+    const appIds: Array<number | string> = await this.broker.call(
+      'inheritedUserApps.getAppsByUser',
+      { user: user.id },
+    );
+
+    if (!appIds?.some((id) => Number(id) === Number(appId))) {
+      throwForbiddenError(
+        `Not authorized to change permissions of app '${appId}'.`,
+        PermissionGrantErrorType.APP,
+      );
+    }
+  }
+
+  @Method
+  async assertGrantWithinOwn(
+    user: User,
+    appId: number,
+    requested: { accesses?: Array<string>; features?: Array<string> },
+  ) {
+    const app: App = await this.broker.call('apps.resolve', { id: appId });
+    const own = await this.computePermissionsByAppAndUser(app, user);
+    const ownAccesses = own?.[PermissionTypeEnum.ACCESSES] ?? [];
+    const ownFeatures = own?.[PermissionTypeEnum.FEATURES] ?? [];
+
+    // `features` undefined: this change does not touch features. An empty list means "all
+    // features" (getPermissionsByAppAndUser).
+    const effectiveFeatures =
+      requested.features === undefined
+        ? []
+        : requested.features.length
+        ? requested.features
+        : [PERMISSION_WILDCARD];
+
+    const exceedsAccesses = !this.isWithin(requested.accesses ?? [], ownAccesses);
+    const exceedsFeatures = !this.isWithin(effectiveFeatures, ownFeatures);
+
+    if (exceedsAccesses || exceedsFeatures) {
+      throwForbiddenError(
+        'Cannot grant accesses or features the caller does not hold.',
+        PermissionGrantErrorType.EXCEEDS_OWN,
+      );
+    }
+  }
+
+  @Method
+  async assertMunicipalitiesWithinOwn(
+    ctx: Context<unknown, UserAuthMeta>,
+    municipalities: Array<string | number>,
+  ) {
+    // An empty list hands the group its parent's municipalities, which the caller cannot
+    // check against his own; only someone who manages all municipalities may clear it.
+    if (!municipalities.length) {
+      if (await this.managesAllMunicipalities(ctx.meta.user.id)) return;
+
+      throwForbiddenError(
+        "Only a municipality manager can clear a group's municipalities.",
+        PermissionGrantErrorType.EXCEEDS_OWN,
+      );
+    }
+
+    const ownMunicipalities: Array<number> =
+      (await this.computeUserMunicipalities(ctx, ctx.meta.user.id)) ?? [];
+
+    const outside = municipalities.filter(
+      (m) => !ownMunicipalities?.some((own) => Number(own) === Number(m)),
+    );
+
+    if (outside.length) {
+      throwForbiddenError(
+        "Cannot grant municipalities outside the caller's own.",
+        PermissionGrantErrorType.EXCEEDS_OWN,
+      );
+    }
+  }
+
+  @Method
+  async managesAllMunicipalities(userId: number): Promise<boolean> {
+    const user: User = await this.broker.call('users.resolve', { id: userId });
+    if (!user) return false;
+    if (user.type === UserType.SUPER_ADMIN) return true;
+
+    const usersApp: App = await this.broker.call('apps.getUsersApp');
+    const usersAppPermissions = await this.computePermissionsByAppAndUser(usersApp, user);
+
+    return usersAppPermissions[PermissionTypeEnum.ACCESSES].some(
+      (access) =>
+        access === PERMISSION_WILDCARD || access === UsersAppAccesses.MANAGE_MUNICIPALITIES,
+    );
+  }
+
+  @Method
+  isWithin(requested: Array<string>, held: Array<string>): boolean {
+    if (held.includes(PERMISSION_WILDCARD)) return true;
+
+    return requested.every((item) => item !== PERMISSION_WILDCARD && held.includes(item));
   }
 
   @Method

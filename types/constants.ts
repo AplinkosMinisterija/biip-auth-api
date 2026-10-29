@@ -48,6 +48,23 @@ export function throwNotFoundError(message?: string, data?: any): Errors.Molecul
   throw new Moleculer.Errors.MoleculerServerError(message || `Not found.`, 404, 'NOT_FOUND', data);
 }
 
+// In a permission's accesses or features, "everything".
+export const PERMISSION_WILDCARD = '*';
+
+export enum PermissionGrantErrorType {
+  GROUP = 'AUTH_UNAUTHORIZED_GROUP',
+  APP = 'AUTH_UNAUTHORIZED_APP',
+  USER_LEVEL = 'AUTH_USER_PERMISSIONS_SUPER_ADMIN_ONLY',
+  EXCEEDS_OWN = 'AUTH_PERMISSION_EXCEEDS_OWN',
+}
+
+export function throwForbiddenError(
+  message: string,
+  type: PermissionGrantErrorType,
+): Errors.MoleculerError {
+  throw new Moleculer.Errors.MoleculerClientError(message, 403, type);
+}
+
 export const COMMON_FIELDS = {
   createdBy: {
     type: 'string',
