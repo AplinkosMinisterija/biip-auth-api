@@ -23,6 +23,12 @@ export const HTTP_INTERNAL_ONLY_ACTIONS = [
   'replace',
   'removeAllEntities',
   'populateByProp',
+  // Raw reads skip the read hooks: `usersLocal/resolve` returned password hashes, and `find`
+  // took a caller's `$raw`. Clients read through `list` and `get`.
+  'find',
+  'findOne',
+  'count',
+  'resolve',
 ];
 
 // Raw CRUD answers over HTTP only where its service gates it with `types`; the ungated ones

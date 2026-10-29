@@ -9,6 +9,7 @@ import {
   RAW_CRUD_ACTIONS,
   RequestMessage,
 } from '../types';
+import { hasRawQueryParams } from '../utils/queryGuard';
 import { App } from './apps.service';
 import { User, UserType } from './users.service';
 export interface UserAuthMeta {
@@ -328,6 +329,13 @@ export default class ApiService extends moleculer.Service {
 
     if (this.isInternalOnlyAction(req.$action)) {
       return this.rejectAuth(ctx, new ApiGateway.Errors.NotFoundError(undefined, null));
+    }
+
+    if (hasRawQueryParams(req.$params as Record<string, unknown>)) {
+      return this.rejectAuth(
+        ctx,
+        new Errors.ValidationError('Raw query conditions are not allowed', 'INVALID_QUERY'),
+      );
     }
 
     if (req.$action.auth === EndpointType.PUBLIC && !user) {

@@ -472,4 +472,61 @@ describe('Security hardening', () => {
       });
     });
   });
+  // The knex adapter hands `$raw` (query/filter) to whereRaw and `&` sort entries to
+  // orderByRaw. Before the gateway refused them, `POST /api/users/find` with a `$raw` UPDATE
+  // made an ordinary user SUPER_ADMIN, and `usersLocal/resolve` returned password hashes.
+  describe('raw SQL never comes from an HTTP caller', () => {
+    const injection = (userId: number) =>
+      `true; UPDATE users SET type='SUPER_ADMIN' WHERE id=${userId}; --`;
+    const typeOfFisher = async () =>
+      ((await broker.call('users.resolve', { id: apiHelper.fisher.id })) as any).type;
+    const asFisher = (req: any) =>
+      req.set(apiHelper.getHeaders(apiHelper.fisherToken, apiHelper.appFishing.apiKey));
+
+    it('POST /api/users/find with $raw is refused and runs nothing', async () => {
+      await asFisher(request(apiService.server).post('/api/users/find'))
+        .send({ query: { $raw: injection(apiHelper.fisher.id) } })
+        .expect(404);
+
+      expect(await typeOfFisher()).toEqual('USER');
+    });
+
+    it('a $raw query on a list is refused before the action', async () => {
+      await asFisher(request(apiService.server).get('/api/users'))
+        .query({ query: JSON.stringify({ $raw: injection(apiHelper.fisher.id) }) })
+        .expect((res: any) => {
+          expect(res.status).toEqual(422);
+          expect(res.body.type).toEqual('INVALID_QUERY');
+        });
+
+      expect(await typeOfFisher()).toEqual('USER');
+    });
+
+    it('a nested $raw in filter is refused', () => {
+      return asFisher(request(apiService.server).get('/api/groups'))
+        .query({ filter: JSON.stringify({ name: { $in: [{ $raw: '1=1' }] } }) })
+        .expect(422);
+    });
+
+    it('a raw sort is refused', () => {
+      return asFisher(request(apiService.server).get('/api/users'))
+        .query({ sort: '&(SELECT 1)' })
+        .expect(422);
+    });
+
+    it('usersLocal/resolve does not return password hashes', () => {
+      return asFisher(request(apiService.server).get('/api/usersLocal/resolve'))
+        .query({ id: 1 })
+        .expect((res: any) => {
+          expect(res.status).toEqual(404);
+          expect(JSON.stringify(res.body)).not.toContain('password');
+        });
+    });
+
+    it('an ordinary list with a plain query and sort still answers', () => {
+      return asFisher(request(apiService.server).get('/api/users'))
+        .query({ query: JSON.stringify({ id: apiHelper.fisher.id }), sort: '-id' })
+        .expect(200);
+    });
+  });
 });
