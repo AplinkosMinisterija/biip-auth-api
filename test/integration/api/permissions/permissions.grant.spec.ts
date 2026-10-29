@@ -176,27 +176,46 @@ describe('Granting permissions', () => {
     });
 
     it("a group grant never rewrites another user's row in the same group", async () => {
-      await grant(apiHelper.superAdminToken, {
+      // Fresh group: the user row exists before any group-only row, so a lookup that ignored
+      // `user` would find and rewrite it.
+      const userRow: any = await broker.call('permissions.create', {
         user: apiHelper.fisherUser.id,
-        group: apiHelper.groupAdminInner.id,
+        group: apiHelper.groupAdminInner2.id,
         app: apiHelper.appFishing.id,
         features: [USER_ROW_FEATURE],
-      }).expect(200);
+      });
 
       await grant(apiHelper.adminToken, {
-        group: apiHelper.groupAdminInner.id,
+        group: apiHelper.groupAdminInner2.id,
         app: apiHelper.appFishing.id,
         features: [SOME_FEATURE],
       })
         .expect(200)
         .expect((res: any) => {
+          expect(res.body.id).not.toEqual(userRow.id);
           expect(res.body.user ?? null).toBeNull();
         });
 
-      const userRow: any = await broker.call('permissions.findOne', {
-        query: { user: apiHelper.fisherUser.id, group: apiHelper.groupAdminInner.id },
+      const unchanged: any = await broker.call('permissions.resolve', { id: userRow.id });
+      expect(unchanged.features).toEqual([USER_ROW_FEATURE]);
+    });
+
+    it("a group grant without a role never rewrites a role's row", async () => {
+      const roleRow: any = await broker.call('permissions.create', {
+        group: apiHelper.groupAdminInner2.id,
+        app: apiHelper.appFishing.id,
+        role: 'USER',
+        features: [USER_ROW_FEATURE],
       });
-      expect(userRow.features).toEqual([USER_ROW_FEATURE]);
+
+      await grant(apiHelper.adminToken, {
+        group: apiHelper.groupAdminInner2.id,
+        app: apiHelper.appFishing.id,
+        features: [SOME_FEATURE],
+      }).expect(200);
+
+      const unchanged: any = await broker.call('permissions.resolve', { id: roleRow.id });
+      expect(unchanged.features).toEqual([USER_ROW_FEATURE]);
     });
   });
 
@@ -275,6 +294,29 @@ describe('Granting permissions', () => {
       ).expect(expectForbidden(PermissionGrantErrorType.EXCEEDS_OWN));
     });
 
+    it('a module app key does not let an admin give a company he belongs to through a child group an access', async () => {
+      const company: any = await broker.call('groups.create', {
+        name: 'Fishing company with a child',
+        apps: [apiHelper.appFishing.id],
+        companyCode: apiHelper.companyCode,
+      });
+      const child: any = await broker.call('groups.create', {
+        name: 'Fishing company child',
+        parent: company.id,
+      });
+      await broker.call('userGroups.create', {
+        user: apiHelper.admin.id,
+        group: child.id,
+        role: 'USER',
+      });
+
+      return modify(
+        apiHelper.adminToken,
+        { group: company.id, access: OTHER_ACCESS, action: 'assign' },
+        apiHelper.appFishing.apiKey,
+      ).expect(expectForbidden(PermissionGrantErrorType.EXCEEDS_OWN));
+    });
+
     it("a module app cannot change another app's company", () => {
       return modify(
         apiHelper.adminToken,
@@ -303,6 +345,18 @@ describe('Granting permissions', () => {
     });
 
     it("an admin cannot clear a group's municipalities to inherit its parent's", () => {
+      return setMunicipalities(apiHelper.adminToken, {
+        group: apiHelper.groupAdminInner.id,
+        municipalities: [],
+      }).expect(expectForbidden(PermissionGrantErrorType.EXCEEDS_OWN));
+    });
+
+    it('a stale cached municipality management right does not let an admin clear municipalities', async () => {
+      await broker.cacher?.set(
+        `permissions.getPermissionsByAppAndUser:${apiHelper.appUsers.id}:${apiHelper.admin.id}`,
+        { accesses: ['MANAGE_MUNICIPALITIES'], features: ['*'] },
+      );
+
       return setMunicipalities(apiHelper.adminToken, {
         group: apiHelper.groupAdminInner.id,
         municipalities: [],

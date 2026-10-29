@@ -53,11 +53,6 @@ interface PermissionType {
   [PermissionTypeEnum.FEATURES]: Array<string>;
 }
 
-const hasAccesses = (value: unknown): value is { accesses: Array<string> } =>
-  typeof value === 'object' &&
-  value !== null &&
-  Array.isArray((value as { accesses?: unknown }).accesses);
-
 @Service({
   name: 'permissions',
 
@@ -341,11 +336,13 @@ export default class PermissionsService extends moleculer.Service {
     },
   })
   async getUserMunicipalities(ctx: Context<{ id: number }>) {
-    const { id } = ctx.params;
-    const user: User = await ctx.call('users.resolve', {
-      id,
-      populate: 'permissions',
-    });
+    return this.computeUserMunicipalities(ctx, ctx.params.id);
+  }
+
+  // Uncached, for decisions to grant; the action above caches it for everyone else.
+  @Method
+  async computeUserMunicipalities(ctx: Context, id: number) {
+    const user: User = await ctx.call('users.resolve', { id });
 
     if (!user) return;
 
@@ -550,7 +547,11 @@ export default class PermissionsService extends moleculer.Service {
     }
 
     const permission: Permission = await ctx.call('permissions.findOne', {
-      query: { group, app: appId, ...(isRestricted && { user: { $exists: false } }) },
+      query: {
+        group,
+        app: appId,
+        ...(isRestricted && { user: { $exists: false }, role: { $exists: false } }),
+      },
     });
 
     if (action === PermissionAction.ASSIGN) {
@@ -844,6 +845,7 @@ export default class PermissionsService extends moleculer.Service {
       query: {
         group: ctx.params.group,
         municipalities: { $exists: true },
+        ...(this.isRestrictedGranter(ctx.meta.user) && { user: { $exists: false } }),
       },
     });
 
@@ -1244,7 +1246,13 @@ export default class PermissionsService extends moleculer.Service {
       { edit: true },
       { meta: ctx.meta },
     );
-    if (editableGroupIds?.some((id) => Number(id) === Number(groupId))) return;
+    // A group created under an editable parent (groups.service `validateIfCanBeCreated`)
+    // counts as editable too, so creating it and setting its municipalities both succeed.
+    const groupAndAncestorIds = await this.getGroupAndAncestorIds(groupId);
+    const isEditable = groupAndAncestorIds.some((id) =>
+      editableGroupIds?.some((editableId) => Number(editableId) === id),
+    );
+    if (isEditable) return;
 
     throwForbiddenError(
       `Not authorized to change permissions of group '${groupId}'.`,
@@ -1254,7 +1262,7 @@ export default class PermissionsService extends moleculer.Service {
 
   // A module's tenant flow (e.g. a fishing company becoming an investigator): the module, with
   // its own app key, assigns its own accesses to one of its companies. The acting admin need
-  // not hold them, but he must not be a member of that company.
+  // not hold them, but he must not belong to that company or to any group below it.
   @Method
   async isOthersCompanyOfApp(
     ctx: Context<unknown, UserAuthMeta>,
@@ -1264,10 +1272,26 @@ export default class PermissionsService extends moleculer.Service {
     const companyIds = await this.getCompanyIdsByApp(appId);
     if (!companyIds.some((id) => Number(id) === Number(groupId))) return false;
 
+    // Membership of any group below the company inherits its permissions too.
+    const childIds: Array<number | string> = await this.broker.call('groups.getGroupChildrenIds', {
+      id: groupId,
+    });
     const membership: UserGroup | null = await this.broker.call('userGroups.findOne', {
-      query: { user: ctx.meta.user.id, group: groupId },
+      query: { user: ctx.meta.user.id, group: { $in: [groupId, ...(childIds ?? [])] } },
     });
     return !membership;
+  }
+
+  @Method
+  async getGroupAndAncestorIds(groupId: number): Promise<Array<number>> {
+    const ids: Array<number> = [];
+    let group: Group | null = await this.broker.call('groups.getGroupWithParents', { id: groupId });
+
+    while (group?.id) {
+      ids.push(Number(group.id));
+      group = typeof group.parent === 'object' ? (group.parent as Group) : null;
+    }
+    return ids;
   }
 
   @Method
@@ -1332,9 +1356,8 @@ export default class PermissionsService extends moleculer.Service {
       );
     }
 
-    const ownMunicipalities: Array<number> = await ctx.call('permissions.getUserMunicipalities', {
-      id: ctx.meta.user.id,
-    });
+    const ownMunicipalities: Array<number> =
+      (await this.computeUserMunicipalities(ctx, ctx.meta.user.id)) ?? [];
 
     const outside = municipalities.filter(
       (m) => !ownMunicipalities?.some((own) => Number(own) === Number(m)),
@@ -1350,19 +1373,14 @@ export default class PermissionsService extends moleculer.Service {
 
   @Method
   async managesAllMunicipalities(userId: number): Promise<boolean> {
-    const user: User = await this.broker.call('users.resolve', {
-      id: userId,
-      populate: 'permissions',
-    });
-    if (user?.type === UserType.SUPER_ADMIN) return true;
+    const user: User = await this.broker.call('users.resolve', { id: userId });
+    if (!user) return false;
+    if (user.type === UserType.SUPER_ADMIN) return true;
 
     const usersApp: App = await this.broker.call('apps.getUsersApp');
-    // `User.permissions` is typed as a flat list, but the populate gives one
-    // `{ accesses, features }` per app type.
-    const usersAppPermissions: unknown = user?.permissions?.[usersApp.type];
-    const usersAppAccesses = hasAccesses(usersAppPermissions) ? usersAppPermissions.accesses : [];
+    const usersAppPermissions = await this.computePermissionsByAppAndUser(usersApp, user);
 
-    return usersAppAccesses.some(
+    return usersAppPermissions[PermissionTypeEnum.ACCESSES].some(
       (access) =>
         access === PERMISSION_WILDCARD || access === UsersAppAccesses.MANAGE_MUNICIPALITIES,
     );
