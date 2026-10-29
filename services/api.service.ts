@@ -3,7 +3,13 @@ import pick from 'lodash/pick';
 import moleculer, { Context, Errors } from 'moleculer';
 import { Action, Method, Service } from 'moleculer-decorators';
 import ApiGateway from 'moleculer-web';
-import { EndpointType, RequestMessage } from '../types';
+import {
+  EndpointType,
+  HTTP_INTERNAL_ONLY_ACTIONS,
+  RAW_CRUD_ACTIONS,
+  RequestMessage,
+} from '../types';
+import { hasRawQueryParams } from '../utils/queryGuard';
 import { App } from './apps.service';
 import { User, UserType } from './users.service';
 export interface UserAuthMeta {
@@ -163,8 +169,16 @@ function verifyApiKey(
           },
         },
 
-        // Mapping policy setting. More info: https://moleculer.services/docs/0.14/moleculer-web.html#Mapping-policy
-        mappingPolicy: 'all', // Available values: "all", "restrict"
+        /*
+         * Only aliases are served: the explicit ones above and those autoAliases builds from each
+         * action's `rest`. Under 'all' any action was reachable by name, and the database mixin
+         * gives every service actions with no gate of their own (replace, removeAllEntities,
+         * find, list of usersLocal with password hashes, groups.remove without the ownership hook
+         * removeGroup has, userGroups.moveToGroup, usersLocal.validateLogin). Every HTTP client
+         * (biip-auth-nodejs, biip-admin-api) calls aliases only. Same change as
+         * biip-medziokle-api #491.
+         */
+        mappingPolicy: 'restrict',
 
         // Enable/disable logging
         logging: true,
@@ -321,6 +335,17 @@ export default class ApiService extends moleculer.Service {
   ): Promise<unknown> {
     const user = ctx.meta.user;
 
+    if (this.isInternalOnlyAction(req.$action)) {
+      return this.rejectAuth(ctx, new ApiGateway.Errors.NotFoundError(undefined, null));
+    }
+
+    if (hasRawQueryParams(req.$params as Record<string, unknown>)) {
+      return this.rejectAuth(
+        ctx,
+        new Errors.ValidationError('Raw query conditions are not allowed', 'INVALID_QUERY'),
+      );
+    }
+
     if (req.$action.auth === EndpointType.PUBLIC && !user) {
       return Promise.resolve(null);
     }
@@ -364,6 +389,15 @@ export default class ApiService extends moleculer.Service {
     }
 
     return Promise.resolve(ctx);
+  }
+
+  @Method
+  isInternalOnlyAction(action: RequestMessage['$action']): boolean {
+    const rawName: unknown = action?.rawName;
+    if (typeof rawName !== 'string') return false;
+    if (HTTP_INTERNAL_ONLY_ACTIONS.includes(rawName)) return true;
+
+    return RAW_CRUD_ACTIONS.includes(rawName) && !action.types;
   }
 
   // Actions an admin may still call while their password is expired: read own
