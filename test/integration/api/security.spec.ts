@@ -220,7 +220,7 @@ describe('Security hardening', () => {
         .delete('/api/groups/999999')
         .set(apiHelper.getHeaders(apiHelper.fisherUserToken, apiHelper.appFishing.apiKey))
         .expect((res: any) => {
-          expect([401, 403, 404]).toContain(res.status);
+          expect([401, 403]).toContain(res.status);
         });
     });
 
@@ -521,6 +521,16 @@ describe('Security hardening', () => {
       return asFisher(request(apiService.server).get('/api/users'))
         .query({ query: doublyEncoded })
         .expect(422);
+    });
+
+    it('text that looks like JSON is not mistaken for a raw query', () => {
+      return request(apiService.server)
+        .post('/api/groups')
+        .set(apiHelper.getHeaders(apiHelper.adminToken))
+        .send({ name: '{"$raw":"just a name"}', parent: apiHelper.groupAdmin.id })
+        .expect((res: any) => {
+          expect(res.body.type).not.toEqual('INVALID_QUERY');
+        });
     });
 
     it('$raw in any other parameter is refused', () => {
