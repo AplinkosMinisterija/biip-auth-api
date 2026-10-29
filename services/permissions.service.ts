@@ -53,6 +53,11 @@ interface PermissionType {
   [PermissionTypeEnum.FEATURES]: Array<string>;
 }
 
+const hasAccesses = (value: unknown): value is { accesses: Array<string> } =>
+  typeof value === 'object' &&
+  value !== null &&
+  Array.isArray((value as { accesses?: unknown }).accesses);
+
 @Service({
   name: 'permissions',
 
@@ -344,16 +349,7 @@ export default class PermissionsService extends moleculer.Service {
 
     if (!user) return;
 
-    const isSuperAdmin = user.type === UserType.SUPER_ADMIN;
-    const usersApp: App = await ctx.call('apps.getUsersApp');
-    const userUsersAppPermissions: any = user.permissions?.[usersApp.type];
-    const hasManageMunicipalityPermission = userUsersAppPermissions
-      ? userUsersAppPermissions.accesses.some(
-          (i: any) => i === '*' || i === UsersAppAccesses.MANAGE_MUNICIPALITIES,
-        )
-      : false;
-
-    if (isSuperAdmin || hasManageMunicipalityPermission) {
+    if (await this.managesAllMunicipalities(user.id)) {
       // all municipalities for super admin
       const municipalities: any = await ctx.call('permissions.listMunicipalities');
       return municipalities.rows.map((r: any) => r.id);
@@ -435,7 +431,7 @@ export default class PermissionsService extends moleculer.Service {
         accesses: Array<string>;
         features: Array<string>;
       },
-      UserAuthMeta
+      AppAuthMeta & UserAuthMeta
     >,
   ) {
     const { user, group, app, role, accesses, features } = ctx.params;
@@ -448,28 +444,50 @@ export default class PermissionsService extends moleculer.Service {
       throwBadRequestError('Group or/and user should be passed.');
     }
 
-    if (this.isRestrictedGranter(ctx.meta.user)) {
-      if (user) {
-        throwForbiddenError(
-          'Only a super admin can set user-level permissions.',
-          PermissionGrantErrorType.USER_LEVEL,
-        );
-      }
-      await this.assertAdministersGroup(ctx.meta.user, group);
-      await this.assertHoldsApp(ctx.meta.user, app);
-      // An omitted features list is stored empty, and an empty list reads as all features.
-      await this.assertGrantWithinOwn(ctx.meta.user, app, { accesses, features: features ?? [] });
+    const isRestricted = this.isRestrictedGranter(ctx.meta.user);
+
+    if (isRestricted && user) {
+      throwForbiddenError(
+        'Only a super admin can set user-level permissions.',
+        PermissionGrantErrorType.USER_LEVEL,
+      );
     }
 
     if (user) query.user = user;
     if (group) query.group = group;
     if (role) query.role = role;
 
+    // A restricted caller changes exactly the group row he names: never a user-level row that
+    // shares the group, nor a row of another role.
+    if (isRestricted) {
+      query.user = { $exists: false };
+      query.role = role || { $exists: false };
+    }
+
     const permission: Permission = await ctx.call('permissions.findOne', {
       query,
     });
 
-    const data = { ...query, accesses, features };
+    if (isRestricted) {
+      await this.assertCanEditGroup(ctx, group);
+      await this.assertHoldsApp(ctx.meta.user, app);
+      // An omitted features list leaves an existing row's features as they are; a new row
+      // gets an empty list, which reads as all features.
+      const changedFeatures = features ?? (permission?.id ? undefined : []);
+      await this.assertGrantWithinOwn(ctx.meta.user, app, {
+        accesses,
+        features: changedFeatures,
+      });
+    }
+
+    const data = {
+      app,
+      ...(user && { user }),
+      ...(group && { group }),
+      ...(role && { role }),
+      accesses,
+      features,
+    };
     if (permission && permission.id) {
       return ctx.call('permissions.update', {
         id: permission.id,
@@ -511,20 +529,28 @@ export default class PermissionsService extends moleculer.Service {
       throwBadRequestError('App ID is missing or invalid.');
     }
 
-    if (this.isRestrictedGranter(ctx.meta.user)) {
-      if (canUseCustomAppId) {
-        await this.assertAdministersGroup(ctx.meta.user, group);
+    const isRestricted = this.isRestrictedGranter(ctx.meta.user);
+
+    if (isRestricted) {
+      await this.assertCanEditGroup(ctx, group);
+      const isTenantFlow =
+        !canUseCustomAppId && (await this.isOthersCompanyOfApp(ctx, group, currentApp.id));
+
+      if (!isTenantFlow) {
         await this.assertHoldsApp(ctx.meta.user, appId);
         if (action === PermissionAction.ASSIGN) {
           await this.assertGrantWithinOwn(ctx.meta.user, appId, { accesses: [access] });
         }
-      } else {
-        await this.assertCanEditGroupInCallingApp(ctx, group);
+      } else if (access === PERMISSION_WILDCARD) {
+        throwForbiddenError(
+          'Cannot grant every access to a company.',
+          PermissionGrantErrorType.EXCEEDS_OWN,
+        );
       }
     }
 
     const permission: Permission = await ctx.call('permissions.findOne', {
-      query: { group, app: appId },
+      query: { group, app: appId, ...(isRestricted && { user: { $exists: false } }) },
     });
 
     if (action === PermissionAction.ASSIGN) {
@@ -807,10 +833,10 @@ export default class PermissionsService extends moleculer.Service {
     },
   })
   async createWithMunicipalities(
-    ctx: Context<{ group: number; municipalities: Array<string> }, UserAuthMeta>,
+    ctx: Context<{ group: number; municipalities: Array<string> }, AppAuthMeta & UserAuthMeta>,
   ) {
     if (this.isRestrictedGranter(ctx.meta.user)) {
-      await this.assertAdministersGroup(ctx.meta.user, ctx.params.group);
+      await this.assertCanEditGroup(ctx, ctx.params.group);
       await this.assertMunicipalitiesWithinOwn(ctx, ctx.params.municipalities);
     }
 
@@ -944,6 +970,16 @@ export default class PermissionsService extends moleculer.Service {
     const permissions = (await this.broker.cacher?.get(redisKey)) as Promise<PermissionType | null>;
     if (permissions) return permissions;
 
+    const result = await this.computePermissionsByAppAndUser(app, user);
+
+    await this.broker.cacher.set(redisKey, result);
+    return result;
+  }
+
+  // Uncached: a read that started before a revocation can repopulate the cache with the old
+  // rights, so a decision to grant must not trust it.
+  @Method
+  async computePermissionsByAppAndUser(app: App, user: User): Promise<PermissionType> {
     const generatePermissionResult = (features?: Array<string>, accesses?: Array<string>) => {
       return {
         [PermissionTypeEnum.ACCESSES]: accesses && accesses.length ? accesses : [],
@@ -1130,10 +1166,7 @@ export default class PermissionsService extends moleculer.Service {
       );
     }
 
-    const result = generatePermissionResult(features, accesses);
-
-    await this.broker.cacher.set(redisKey, result);
-    return result;
+    return generatePermissionResult(features, accesses);
   }
 
   @Method
@@ -1196,38 +1229,45 @@ export default class PermissionsService extends moleculer.Service {
     return !!user && user.type !== UserType.SUPER_ADMIN;
   }
 
+  // The rule that lets him create or edit the group (groups.service `hasPermissionToAccess`),
+  // plus every group he is group-ADMIN of.
   @Method
-  async assertAdministersGroup(user: User, groupId: number) {
-    const administeredGroupIds = await this.getVisibleGroupsByUser(user.id, UserGroupRole.ADMIN);
+  async assertCanEditGroup(ctx: Context<unknown, AppAuthMeta & UserAuthMeta>, groupId: number) {
+    const administeredGroupIds = await this.getVisibleGroupsByUser(
+      ctx.meta.user.id,
+      UserGroupRole.ADMIN,
+    );
+    if (administeredGroupIds.some((id) => Number(id) === Number(groupId))) return;
 
-    if (!administeredGroupIds.some((id) => Number(id) === Number(groupId))) {
-      throwForbiddenError(
-        `Not authorized to change permissions of group '${groupId}'.`,
-        PermissionGrantErrorType.GROUP,
-      );
-    }
-  }
-
-  // App-driven flows (e.g. a fishing tenant becoming an investigator) run with the acting
-  // admin's token and the module's own app key; the module may change its own app's
-  // accesses on the groups that app lets the caller edit, its companies included.
-  @Method
-  async assertCanEditGroupInCallingApp(
-    ctx: Context<unknown, AppAuthMeta & UserAuthMeta>,
-    groupId: number,
-  ) {
     const editableGroupIds: Array<number | string> = await ctx.call(
       'permissions.getVisibleGroupsIds',
       { edit: true },
       { meta: ctx.meta },
     );
+    if (editableGroupIds?.some((id) => Number(id) === Number(groupId))) return;
 
-    if (!editableGroupIds?.some((id) => Number(id) === Number(groupId))) {
-      throwForbiddenError(
-        `Not authorized to change permissions of group '${groupId}'.`,
-        PermissionGrantErrorType.GROUP,
-      );
-    }
+    throwForbiddenError(
+      `Not authorized to change permissions of group '${groupId}'.`,
+      PermissionGrantErrorType.GROUP,
+    );
+  }
+
+  // A module's tenant flow (e.g. a fishing company becoming an investigator): the module, with
+  // its own app key, assigns its own accesses to one of its companies. The acting admin need
+  // not hold them, but he must not be a member of that company.
+  @Method
+  async isOthersCompanyOfApp(
+    ctx: Context<unknown, UserAuthMeta>,
+    groupId: number,
+    appId: number,
+  ): Promise<boolean> {
+    const companyIds = await this.getCompanyIdsByApp(appId);
+    if (!companyIds.some((id) => Number(id) === Number(groupId))) return false;
+
+    const membership: UserGroup | null = await this.broker.call('userGroups.findOne', {
+      query: { user: ctx.meta.user.id, group: groupId },
+    });
+    return !membership;
   }
 
   @Method
@@ -1252,7 +1292,7 @@ export default class PermissionsService extends moleculer.Service {
     requested: { accesses?: Array<string>; features?: Array<string> },
   ) {
     const app: App = await this.broker.call('apps.resolve', { id: appId });
-    const own = await this.getPermissionsByAppAndUser(app, user);
+    const own = await this.computePermissionsByAppAndUser(app, user);
     const ownAccesses = own?.[PermissionTypeEnum.ACCESSES] ?? [];
     const ownFeatures = own?.[PermissionTypeEnum.FEATURES] ?? [];
 
@@ -1281,6 +1321,17 @@ export default class PermissionsService extends moleculer.Service {
     ctx: Context<unknown, UserAuthMeta>,
     municipalities: Array<string | number>,
   ) {
+    // An empty list hands the group its parent's municipalities, which the caller cannot
+    // check against his own; only someone who manages all municipalities may clear it.
+    if (!municipalities.length) {
+      if (await this.managesAllMunicipalities(ctx.meta.user.id)) return;
+
+      throwForbiddenError(
+        "Only a municipality manager can clear a group's municipalities.",
+        PermissionGrantErrorType.EXCEEDS_OWN,
+      );
+    }
+
     const ownMunicipalities: Array<number> = await ctx.call('permissions.getUserMunicipalities', {
       id: ctx.meta.user.id,
     });
@@ -1295,6 +1346,26 @@ export default class PermissionsService extends moleculer.Service {
         PermissionGrantErrorType.EXCEEDS_OWN,
       );
     }
+  }
+
+  @Method
+  async managesAllMunicipalities(userId: number): Promise<boolean> {
+    const user: User = await this.broker.call('users.resolve', {
+      id: userId,
+      populate: 'permissions',
+    });
+    if (user?.type === UserType.SUPER_ADMIN) return true;
+
+    const usersApp: App = await this.broker.call('apps.getUsersApp');
+    // `User.permissions` is typed as a flat list, but the populate gives one
+    // `{ accesses, features }` per app type.
+    const usersAppPermissions: unknown = user?.permissions?.[usersApp.type];
+    const usersAppAccesses = hasAccesses(usersAppPermissions) ? usersAppPermissions.accesses : [];
+
+    return usersAppAccesses.some(
+      (access) =>
+        access === PERMISSION_WILDCARD || access === UsersAppAccesses.MANAGE_MUNICIPALITIES,
+    );
   }
 
   @Method

@@ -19,6 +19,8 @@ const SOME_ACCESS = 'SOME_ACCESS';
 const OTHER_ACCESS = 'OTHER_ACCESS';
 const SOME_FEATURE = 'SOME_FEATURE';
 const SOME_MUNICIPALITY = 13;
+const STALE_ACCESS = 'STALE_ACCESS';
+const USER_ROW_FEATURE = 'USER_ROW_FEATURE';
 
 const initialize = async (broker: any) => {
   await broker.start();
@@ -131,11 +133,70 @@ describe('Granting permissions', () => {
     });
 
     it('an admin with restricted features cannot widen a group to all features', () => {
-      // groupAdminInner now holds [SOME_FEATURE] only (set above).
+      // groupAdminInner now holds [SOME_FEATURE] only (set above); an empty list means all.
       return grant(apiHelper.adminInnerToken, {
         group: apiHelper.groupAdminInner.id,
         app: apiHelper.appFishing.id,
+        features: [],
       }).expect(expectForbidden(PermissionGrantErrorType.EXCEEDS_OWN));
+    });
+
+    it('an admin with restricted features cannot create a row without features', () => {
+      return grant(apiHelper.adminInnerToken, {
+        group: apiHelper.groupAdminInner.id,
+        app: apiHelper.appFishing.id,
+        role: 'USER',
+        accesses: [],
+      }).expect(expectForbidden(PermissionGrantErrorType.EXCEEDS_OWN));
+    });
+
+    it('an admin with restricted features can change accesses only, keeping the features', () => {
+      return grant(apiHelper.adminInnerToken, {
+        group: apiHelper.groupAdminInner.id,
+        app: apiHelper.appFishing.id,
+        accesses: [SOME_ACCESS],
+      })
+        .expect(200)
+        .expect((res: any) => {
+          expect(res.body.features).toEqual([SOME_FEATURE]);
+        });
+    });
+
+    it('a stale cached permission does not let an admin grant what he no longer holds', async () => {
+      await broker.cacher?.set(
+        `permissions.getPermissionsByAppAndUser:${apiHelper.appFishing.id}:${apiHelper.admin.id}`,
+        { accesses: [STALE_ACCESS], features: ['*'] },
+      );
+
+      return grant(apiHelper.adminToken, {
+        group: apiHelper.groupAdminInner.id,
+        app: apiHelper.appFishing.id,
+        accesses: [STALE_ACCESS],
+      }).expect(expectForbidden(PermissionGrantErrorType.EXCEEDS_OWN));
+    });
+
+    it("a group grant never rewrites another user's row in the same group", async () => {
+      await grant(apiHelper.superAdminToken, {
+        user: apiHelper.fisherUser.id,
+        group: apiHelper.groupAdminInner.id,
+        app: apiHelper.appFishing.id,
+        features: [USER_ROW_FEATURE],
+      }).expect(200);
+
+      await grant(apiHelper.adminToken, {
+        group: apiHelper.groupAdminInner.id,
+        app: apiHelper.appFishing.id,
+        features: [SOME_FEATURE],
+      })
+        .expect(200)
+        .expect((res: any) => {
+          expect(res.body.user ?? null).toBeNull();
+        });
+
+      const userRow: any = await broker.call('permissions.findOne', {
+        query: { user: apiHelper.fisherUser.id, group: apiHelper.groupAdminInner.id },
+      });
+      expect(userRow.features).toEqual([USER_ROW_FEATURE]);
     });
   });
 
@@ -190,6 +251,30 @@ describe('Granting permissions', () => {
         });
     });
 
+    it('a module app key does not let an admin give his own group every access', () => {
+      return modify(
+        apiHelper.adminToken,
+        { group: apiHelper.groupAdmin.id, access: '*', action: 'assign' },
+        apiHelper.appFishing.apiKey,
+      ).expect(expectForbidden(PermissionGrantErrorType.EXCEEDS_OWN));
+    });
+
+    it('a module app key does not let an admin give his own group an access he lacks', () => {
+      return modify(
+        apiHelper.adminToken,
+        { group: apiHelper.groupAdmin.id, access: OTHER_ACCESS, action: 'assign' },
+        apiHelper.appFishing.apiKey,
+      ).expect(expectForbidden(PermissionGrantErrorType.EXCEEDS_OWN));
+    });
+
+    it('a module app cannot give a company every access', () => {
+      return modify(
+        apiHelper.adminToken,
+        { group: apiHelper.groupFishersCompany.id, access: '*', action: 'assign' },
+        apiHelper.appFishing.apiKey,
+      ).expect(expectForbidden(PermissionGrantErrorType.EXCEEDS_OWN));
+    });
+
     it("a module app cannot change another app's company", () => {
       return modify(
         apiHelper.adminToken,
@@ -215,6 +300,13 @@ describe('Granting permissions', () => {
         group: apiHelper.groupFishers.id,
         municipalities: [SOME_MUNICIPALITY],
       }).expect(expectForbidden(PermissionGrantErrorType.GROUP));
+    });
+
+    it("an admin cannot clear a group's municipalities to inherit its parent's", () => {
+      return setMunicipalities(apiHelper.adminToken, {
+        group: apiHelper.groupAdminInner.id,
+        municipalities: [],
+      }).expect(expectForbidden(PermissionGrantErrorType.EXCEEDS_OWN));
     });
 
     it('an admin cannot grant municipalities outside his own', () => {
