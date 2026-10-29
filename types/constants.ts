@@ -12,6 +12,23 @@ export enum EndpointType {
   APP = 'APP',
 }
 
+/*
+ * Database-mixin actions every service gets that no HTTP client uses. Under the gateway's
+ * `mappingPolicy: 'all'` they are reachable by name (`POST /api/users/replace`), and none
+ * carries a `types` gate, so an ordinary token holder with an app key could make himself
+ * SUPER_ADMIN or empty a table. Internal broker calls do not pass the gateway.
+ */
+export const HTTP_INTERNAL_ONLY_ACTIONS = [
+  'createMany',
+  'replace',
+  'removeAllEntities',
+  'populateByProp',
+];
+
+// Raw CRUD answers over HTTP only where its service gates it with `types`; the ungated ones
+// (userGroups, usersLocal, usersEvartai) are written by other actions inside auth-api.
+export const RAW_CRUD_ACTIONS = ['create', 'update', 'remove', 'findOrCreate'];
+
 // Admin/super-admin local passwords must be rotated at least this often.
 export const PASSWORD_MAX_AGE_DAYS = 90;
 

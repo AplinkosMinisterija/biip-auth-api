@@ -3,7 +3,12 @@ import pick from 'lodash/pick';
 import moleculer, { Context, Errors } from 'moleculer';
 import { Action, Method, Service } from 'moleculer-decorators';
 import ApiGateway from 'moleculer-web';
-import { EndpointType, RequestMessage } from '../types';
+import {
+  EndpointType,
+  HTTP_INTERNAL_ONLY_ACTIONS,
+  RAW_CRUD_ACTIONS,
+  RequestMessage,
+} from '../types';
 import { App } from './apps.service';
 import { User, UserType } from './users.service';
 export interface UserAuthMeta {
@@ -321,6 +326,10 @@ export default class ApiService extends moleculer.Service {
   ): Promise<unknown> {
     const user = ctx.meta.user;
 
+    if (this.isInternalOnlyAction(req.$action)) {
+      return this.rejectAuth(ctx, new ApiGateway.Errors.NotFoundError(undefined, null));
+    }
+
     if (req.$action.auth === EndpointType.PUBLIC && !user) {
       return Promise.resolve(null);
     }
@@ -364,6 +373,15 @@ export default class ApiService extends moleculer.Service {
     }
 
     return Promise.resolve(ctx);
+  }
+
+  @Method
+  isInternalOnlyAction(action: RequestMessage['$action']): boolean {
+    const rawName: unknown = action?.rawName;
+    if (typeof rawName !== 'string') return false;
+    if (HTTP_INTERNAL_ONLY_ACTIONS.includes(rawName)) return true;
+
+    return RAW_CRUD_ACTIONS.includes(rawName) && !action.types;
   }
 
   // Actions an admin may still call while their password is expired: read own

@@ -400,4 +400,76 @@ describe('Security hardening', () => {
       });
     });
   });
+  // Raw database-mixin actions reached by name under mappingPolicy:'all'. Before the gateway
+  // refused them, an ordinary USER with an app key made himself SUPER_ADMIN through
+  // users/replace, joined any group as ADMIN through userGroups/create and emptied the
+  // permissions table through permissions/removeAllEntities.
+  describe('internal-only database actions are not reachable over HTTP', () => {
+    // The gateway's own 404, not the action's ENTITY_NOT_FOUND for a missing id.
+    const expectRouteNotFound = (res: any) => {
+      expect(res.status).toEqual(404);
+      expect(res.body.type).toEqual('NOT_FOUND');
+    };
+
+    const post = (path: string, body: Record<string, unknown>, token = apiHelper.fisherToken) =>
+      request(apiService.server)
+        .post(path)
+        .set(apiHelper.getHeaders(token, apiHelper.appFishing.apiKey))
+        .send(body);
+
+    it('a user cannot make himself SUPER_ADMIN via users/replace', async () => {
+      await post('/api/users/replace', {
+        id: apiHelper.fisher.id,
+        type: 'SUPER_ADMIN',
+        firstName: 'X',
+        lastName: 'Y',
+        email: apiHelper.emailFisher,
+      }).expect(expectRouteNotFound);
+
+      const fisher: any = await broker.call('users.resolve', { id: apiHelper.fisher.id });
+      expect(fisher.type).toEqual('USER');
+    });
+
+    it('a super admin cannot empty a table via removeAllEntities either', async () => {
+      const before = await broker.call('permissions.count');
+
+      await post('/api/permissions/removeAllEntities', {}, apiHelper.superAdminToken).expect(
+        expectRouteNotFound,
+      );
+
+      expect(await broker.call('permissions.count')).toEqual(before);
+    });
+
+    it('a user cannot join a group via userGroups/create', async () => {
+      await post('/api/userGroups/create', {
+        user: apiHelper.fisher.id,
+        group: apiHelper.groupAdmin.id,
+        role: 'ADMIN',
+      }).expect(expectRouteNotFound);
+
+      const membership = await broker.call('userGroups.findOne', {
+        query: { user: apiHelper.fisher.id, group: apiHelper.groupAdmin.id },
+      });
+      expect(membership).toBeFalsy();
+    });
+
+    it.each([
+      ['/api/userGroups/update', { id: 1, role: 'ADMIN' }],
+      ['/api/userGroups/remove', { id: 1 }],
+      ['/api/usersLocal/findOrCreate', { email: 'raw.create@am.lt', type: 'SUPER_ADMIN' }],
+      ['/api/usersLocal/update', { id: 1, password: 'x' }],
+      ['/api/usersEvartai/create', { personalCode: '39001010000' }],
+      ['/api/permissions/replace', { id: 1, accesses: ['*'] }],
+      ['/api/groups/createMany', [{ name: 'X' }]],
+      ['/api/users/populateByProp', { id: 1, queryKey: 'id' }],
+    ])('%s answers 404 before reaching the action', (path: string, body: any) =>
+      post(path, body).expect(expectRouteNotFound),
+    );
+
+    it('typed CRUD is still answered by its own gate', () => {
+      return post('/api/permissions/create', { group: 1, accesses: ['*'] }).expect((res: any) => {
+        expect([401, 403]).toContain(res.status);
+      });
+    });
+  });
 });
