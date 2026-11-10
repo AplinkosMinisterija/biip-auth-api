@@ -3,6 +3,7 @@ import pick from 'lodash/pick';
 import moleculer, { Context, Errors } from 'moleculer';
 import { Action, Method, Service } from 'moleculer-decorators';
 import ApiGateway from 'moleculer-web';
+import { stripClientRaw } from '../utils/sanitizeClientParams';
 import { EndpointType, RequestMessage } from '../types';
 import { App } from './apps.service';
 import { User, UserType } from './users.service';
@@ -24,6 +25,8 @@ function verifyApiKey(
   route: any,
   req: RequestMessage,
 ): Promise<unknown> {
+  // Removes client-supplied `$raw` (raw SQL) from params.
+  stripClientRaw(ctx, route, req);
   return this.verifyApiKey(ctx, req.headers);
 }
 
@@ -45,6 +48,8 @@ function verifyApiKey(
     routes: [
       {
         path: '/',
+        // Removes client-supplied `$raw` (raw SQL) from params.
+        onBeforeCall: stripClientRaw,
         authorization: false,
         authentication: false,
         aliases: {
@@ -67,6 +72,8 @@ function verifyApiKey(
       },
       {
         path: '/api/openapi',
+        // Removes client-supplied `$raw` (raw SQL) from params.
+        onBeforeCall: stripClientRaw,
         authorization: false,
         authentication: false,
         aliases: {
