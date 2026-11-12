@@ -1,3 +1,4 @@
+import { captureException } from '@sentry/node';
 import { ServerClient } from 'postmark';
 import { User } from '../services/users.service';
 let client: ServerClient;
@@ -15,6 +16,20 @@ const passwordResetTemplateId = Number(process.env.POSTMARK_PASSWORD_RESET_TEMPL
 export function emailCanBeSent() {
   return ['production', 'staging'].includes(process.env.NODE_ENV);
 }
+
+// The invite's writes are already committed here - a mail failure must not
+// abort the action, or it strands a user the caller never records.
+export async function trySendEmail(send: () => Promise<unknown>, context?: EmailContext) {
+  try {
+    await send();
+    return true;
+  } catch (error) {
+    captureException(error, { extra: { ...context } });
+    return false;
+  }
+}
+
+type EmailContext = { template: string };
 
 function getSender(name?: string) {
   if (!name) return sender;

@@ -16,7 +16,12 @@ import {
   throwBadRequestError,
   throwNotFoundError,
 } from '../types';
-import { emailCanBeSent, normalizeName, sendEvartaiInvitationEmail } from '../utils';
+import {
+  emailCanBeSent,
+  normalizeName,
+  sendEvartaiInvitationEmail,
+  trySendEmail,
+} from '../utils';
 import { AppAuthMeta, UserAuthMeta } from './api.service';
 import { App } from './apps.service';
 import { Group } from './groups.service';
@@ -293,6 +298,11 @@ export default class UsersEvartaiService extends moleculer.Service {
         optional: true,
         default: true,
       },
+      notifyIfExists: {
+        type: 'boolean',
+        optional: true,
+        default: false,
+      },
     },
   })
   async invite(
@@ -304,11 +314,13 @@ export default class UsersEvartaiService extends moleculer.Service {
         role: UserGroupRole;
         notify: Array<string>;
         throwErrors: boolean;
+        notifyIfExists: boolean;
       },
       AppAuthMeta & UserAuthMeta
     >,
   ) {
-    const { personalCode, companyCode, companyId, role, notify, throwErrors } = ctx.params;
+    const { personalCode, companyCode, companyId, role, notify, throwErrors, notifyIfExists } =
+      ctx.params;
 
     const { meta } = ctx;
 
@@ -336,18 +348,21 @@ export default class UsersEvartaiService extends moleculer.Service {
         inviteType = ` kaip fizinis asmuo`;
       }
 
-      return Promise.all(
-        notify.map((email) => {
-          return sendEvartaiInvitationEmail(email, {
-            senderName: app.settings?.productName,
-            appUrl: app.url,
-            appName: app.settings?.productNameTo,
-            inviterName,
-            inviterEmail: inviter.email,
-            inviteType,
-            isApp: !!app.settings?.isApp,
-          });
-        }),
+      return trySendEmail(() =>
+        Promise.all(
+          notify.map((email) => {
+            return sendEvartaiInvitationEmail(email, {
+              senderName: app.settings?.productName,
+              appUrl: app.url,
+              appName: app.settings?.productNameTo,
+              inviterName,
+              inviterEmail: inviter.email,
+              inviteType,
+              isApp: !!app.settings?.isApp,
+            });
+          }),
+        ),
+        { template: 'evartai-invitation' },
       );
     };
 
@@ -396,12 +411,17 @@ export default class UsersEvartaiService extends moleculer.Service {
       });
 
       if (alreadyHadApp && !companyId) {
-        if (!throwErrors) return returnData;
+        if (throwErrors) {
+          throw new moleculer.Errors.ValidationError(
+            `User with personal code '${personalCode}' already exists.`,
+            'AUTH_USER_EXISTS',
+          );
+        }
 
-        throw new moleculer.Errors.ValidationError(
-          `User with personal code '${personalCode}' already exists.`,
-          'AUTH_USER_EXISTS',
-        );
+        // A caller adopting a user auth already holds still owes them the
+        // invitation; one re-resolving a known person does not.
+        if (notifyIfExists) await sendInvitations();
+        return returnData;
       }
 
       if (companyId) {
