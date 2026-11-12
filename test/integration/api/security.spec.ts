@@ -179,10 +179,9 @@ describe('Security hardening', () => {
     });
   });
 
-  // mappingPolicy:'all' on the /api route means an action with no REST alias is
-  // still reachable by name (POST /api/<service>/<action>). rest:null does NOT
-  // protect it — only a `types` gate does. These assert the raw mutating actions
-  // reject a non-privileged caller via that direct-mapping path.
+  // The /api route used mappingPolicy:'all', so an action with no REST alias was
+  // reachable by name (POST /api/<service>/<action>). It is 'restrict' now (404), and
+  // the `types` gates stay as a second line (401/403).
   describe('raw action surface is type-gated (mappingPolicy bypass)', () => {
     // Use adminToken (a real UserType.ADMIN) — these actions are SUPER_ADMIN-only,
     // so blocking an ADMIN proves the gate, not just the absence of privilege.
@@ -192,7 +191,7 @@ describe('Security hardening', () => {
         .set(apiHelper.getHeaders(apiHelper.adminToken, apiHelper.appFishing.apiKey))
         .send({ group: apiHelper.groupFishersCompany.id, accesses: ['*'], role: 'ADMIN' })
         .expect((res: any) => {
-          expect([401, 403]).toContain(res.status);
+          expect([401, 403, 404]).toContain(res.status);
         });
     });
 
@@ -202,7 +201,7 @@ describe('Security hardening', () => {
         .set(apiHelper.getHeaders(apiHelper.adminToken, apiHelper.appFishing.apiKey))
         .send({ firstName: 'X', lastName: 'Y', email: 'bypass.create@am.lt' })
         .expect((res: any) => {
-          expect([401, 403]).toContain(res.status);
+          expect([401, 403, 404]).toContain(res.status);
         });
     });
 
@@ -212,7 +211,7 @@ describe('Security hardening', () => {
         .set(apiHelper.getHeaders(apiHelper.adminToken, apiHelper.appFishing.apiKey))
         .send({ id: 1, groups: [{ id: apiHelper.groupFishersCompany.id, role: 'ADMIN' }] })
         .expect((res: any) => {
-          expect([401, 403]).toContain(res.status);
+          expect([401, 403, 404]).toContain(res.status);
         });
     });
 
@@ -238,7 +237,7 @@ describe('Security hardening', () => {
         .set(apiHelper.getHeaders(apiHelper.adminToken, apiHelper.appFishing.apiKey))
         .send({ id: 999999 })
         .expect((res: any) => {
-          expect([401, 403]).toContain(res.status);
+          expect([401, 403, 404]).toContain(res.status);
         });
     });
 
@@ -248,7 +247,7 @@ describe('Security hardening', () => {
         .set(apiHelper.getHeaders(apiHelper.adminToken, apiHelper.appFishing.apiKey))
         .send({ id: 999999 })
         .expect((res: any) => {
-          expect([401, 403]).toContain(res.status);
+          expect([401, 403, 404]).toContain(res.status);
         });
     });
   });
@@ -398,6 +397,167 @@ describe('Security hardening', () => {
       ).expect((res: any) => {
         expect([401, 403]).toContain(res.status);
       });
+    });
+  });
+  // Raw database-mixin actions reached by name under mappingPolicy:'all'. Before the gateway
+  // refused them, an ordinary USER with an app key made himself SUPER_ADMIN through
+  // users/replace, joined any group as ADMIN through userGroups/create and emptied the
+  // permissions table through permissions/removeAllEntities.
+  describe('internal-only database actions are not reachable over HTTP', () => {
+    // The gateway's own 404, not the action's ENTITY_NOT_FOUND for a missing id.
+    const expectRouteNotFound = (res: any) => {
+      expect(res.status).toEqual(404);
+      expect(res.body.type).toEqual('NOT_FOUND');
+    };
+
+    const post = (path: string, body: Record<string, unknown>, token = apiHelper.fisherToken) =>
+      request(apiService.server)
+        .post(path)
+        .set(apiHelper.getHeaders(token, apiHelper.appFishing.apiKey))
+        .send(body);
+
+    it('a user cannot make himself SUPER_ADMIN via users/replace', async () => {
+      await post('/api/users/replace', {
+        id: apiHelper.fisher.id,
+        type: 'SUPER_ADMIN',
+        firstName: 'X',
+        lastName: 'Y',
+        email: apiHelper.emailFisher,
+      }).expect(expectRouteNotFound);
+
+      const fisher: any = await broker.call('users.resolve', { id: apiHelper.fisher.id });
+      expect(fisher.type).toEqual('USER');
+    });
+
+    it('a super admin cannot empty a table via removeAllEntities either', async () => {
+      const before = await broker.call('permissions.count');
+
+      await post('/api/permissions/removeAllEntities', {}, apiHelper.superAdminToken).expect(
+        expectRouteNotFound,
+      );
+
+      expect(await broker.call('permissions.count')).toEqual(before);
+    });
+
+    it('a user cannot join a group via userGroups/create', async () => {
+      await post('/api/userGroups/create', {
+        user: apiHelper.fisher.id,
+        group: apiHelper.groupAdmin.id,
+        role: 'ADMIN',
+      }).expect(expectRouteNotFound);
+
+      const membership = await broker.call('userGroups.findOne', {
+        query: { user: apiHelper.fisher.id, group: apiHelper.groupAdmin.id },
+      });
+      expect(membership).toBeFalsy();
+    });
+
+    it.each([
+      ['/api/userGroups/update', { id: 1, role: 'ADMIN' }],
+      ['/api/userGroups/remove', { id: 1 }],
+      ['/api/usersLocal/findOrCreate', { email: 'raw.create@am.lt', type: 'SUPER_ADMIN' }],
+      ['/api/usersLocal/update', { id: 1, password: 'x' }],
+      ['/api/usersEvartai/create', { personalCode: '39001010000' }],
+      ['/api/permissions/replace', { id: 1, accesses: ['*'] }],
+      ['/api/groups/createMany', [{ name: 'X' }]],
+      ['/api/users/populateByProp', { id: 1, queryKey: 'id' }],
+    ])('%s answers 404 before reaching the action', (path: string, body: any) =>
+      post(path, body).expect(expectRouteNotFound),
+    );
+
+    it('a typed alias is still answered by its own gate', () => {
+      return post('/api/groups', { name: 'X', apps: [apiHelper.appFishing.id] }).expect(401);
+    });
+
+    it.each([
+      ['/api/usersLocal/list', {}],
+      ['/api/usersLocal/get', { id: 1 }],
+      ['/api/usersLocal/validateLogin', { email: 'user.fisher@am.lt', password: 'x' }],
+      ['/api/groups/remove', { id: 1 }],
+      ['/api/userGroups/moveToGroup', { source: 1, dist: 2 }],
+      ['/api/groups/findOrCreate', { name: 'X' }],
+    ])('%s is not served by name', (path: string, body: any) =>
+      post(path, body, apiHelper.adminToken).expect(404),
+    );
+  });
+  // The knex adapter hands `$raw` (query/filter) to whereRaw and `&` sort entries to
+  // orderByRaw. Before the gateway refused them, `POST /api/users/find` with a `$raw` UPDATE
+  // made an ordinary user SUPER_ADMIN, and `usersLocal/resolve` returned password hashes.
+  describe('raw SQL never comes from an HTTP caller', () => {
+    const injection = (userId: number) =>
+      `true; UPDATE users SET type='SUPER_ADMIN' WHERE id=${userId}; --`;
+    const typeOfFisher = async () =>
+      ((await broker.call('users.resolve', { id: apiHelper.fisher.id })) as any).type;
+    const asFisher = (req: any) =>
+      req.set(apiHelper.getHeaders(apiHelper.fisherToken, apiHelper.appFishing.apiKey));
+
+    it('POST /api/users/find with $raw is refused and runs nothing', async () => {
+      await asFisher(request(apiService.server).post('/api/users/find'))
+        .send({ query: { $raw: injection(apiHelper.fisher.id) } })
+        .expect(404);
+
+      expect(await typeOfFisher()).toEqual('USER');
+    });
+
+    it('a $raw query on a list is refused before the action', async () => {
+      await asFisher(request(apiService.server).get('/api/users'))
+        .query({ query: JSON.stringify({ $raw: injection(apiHelper.fisher.id) }) })
+        .expect((res: any) => {
+          expect(res.status).toEqual(422);
+          expect(res.body.type).toEqual('INVALID_QUERY');
+        });
+
+      expect(await typeOfFisher()).toEqual('USER');
+    });
+
+    it('a nested $raw in filter is refused', () => {
+      return asFisher(request(apiService.server).get('/api/groups'))
+        .query({ filter: JSON.stringify({ name: { $in: [{ $raw: '1=1' }] } }) })
+        .expect(422);
+    });
+
+    it('a doubly encoded $raw query is refused', () => {
+      const doublyEncoded = JSON.stringify(JSON.stringify({ $raw: '1=1' }));
+      return asFisher(request(apiService.server).get('/api/users'))
+        .query({ query: doublyEncoded })
+        .expect(422);
+    });
+
+    it('text that looks like JSON is not mistaken for a raw query', () => {
+      return request(apiService.server)
+        .post('/api/groups')
+        .set(apiHelper.getHeaders(apiHelper.adminToken))
+        .send({ name: '{"$raw":"just a name"}', parent: apiHelper.groupAdmin.id })
+        .expect((res: any) => {
+          expect(res.body.type).not.toEqual('INVALID_QUERY');
+        });
+    });
+
+    it('$raw in any other parameter is refused', () => {
+      return asFisher(request(apiService.server).post('/api/groups'))
+        .send({ name: { $raw: '1=1' }, apps: [apiHelper.appFishing.id] })
+        .expect(422);
+    });
+
+    it('a raw sort is refused', () => {
+      return asFisher(request(apiService.server).get('/api/users'))
+        .query({ sort: '&(SELECT 1)' })
+        .expect(422);
+    });
+
+    it('usersLocal/resolve does not return password hashes', () => {
+      return asFisher(request(apiService.server).get('/api/usersLocal/resolve'))
+        .query({ id: 1 })
+        .expect((res: any) => {
+          expect(res.status).toEqual(404);
+          expect(JSON.stringify(res.body)).not.toContain('password');
+        });
+    });
+
+    it('an ordinary list with a plain query and sort still answers', () => {
+      return asFisher(request(apiService.server).get('/api/users'))
+        .query({ query: JSON.stringify({ id: apiHelper.fisher.id }), sort: '-id' })
+        .expect(200);
     });
   });
 });
