@@ -16,7 +16,13 @@ import {
 import { AppAuthMeta, AuthStrategy, UserAuthMeta } from './api.service';
 import { App } from './apps.service';
 import { User, UserType } from './users.service';
-import { EndpointType, throwBadRequestError, throwNotFoundError } from '../types';
+import {
+  EndpointType,
+  throwBadRequestError,
+  throwNotFoundError,
+  throwUnauthorizedError,
+} from '../types';
+import { captchaRequired, verifyCaptcha } from '../utils/recaptcha';
 
 @Service({
   name: 'auth',
@@ -51,6 +57,7 @@ export default class AuthService extends moleculer.Service {
     const email = ctx.params.email.toLowerCase();
 
     await this.assertLoginNotRateLimited(email);
+    await this.assertCaptcha(ctx.params.captchaToken, ctx.meta.app);
 
     let strategyId: number;
     let id: number;
@@ -397,6 +404,8 @@ export default class AuthService extends moleculer.Service {
     let { email } = ctx.params;
     email = email.toLowerCase();
 
+    await this.assertCaptcha(ctx.params.captchaToken, ctx.meta.app);
+
     const { id, userId }: any = await ctx.call('usersLocal.validateRemind', {
       email,
     });
@@ -723,6 +732,14 @@ export default class AuthService extends moleculer.Service {
     // admin slip past the gate for up to the cache TTL right after rollout.
     if (this.broker.cacher) {
       await this.broker.cacher.clean('auth.parseToken**');
+    }
+  }
+
+  @Method
+  async assertCaptcha(token: string | undefined, app?: App) {
+    if (!captchaRequired(app?.type)) return;
+    if (!(await verifyCaptcha(token))) {
+      throwUnauthorizedError('Captcha verification failed.');
     }
   }
 }
