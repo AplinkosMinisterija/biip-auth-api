@@ -346,7 +346,7 @@ export default class ApiService extends moleculer.Service {
       return this.rejectAuth(ctx, new ApiGateway.Errors.NotFoundError(undefined, null));
     }
 
-    if (hasRawQueryParams(req.$params as Record<string, unknown>)) {
+    if ((req as any).$rawQueryParams || hasRawQueryParams(req.$params as Record<string, unknown>)) {
       return this.rejectAuth(
         ctx,
         new Errors.ValidationError('Raw query conditions are not allowed', 'INVALID_QUERY'),

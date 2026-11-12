@@ -1,3 +1,5 @@
+import { hasRawQueryParams } from './queryGuard';
+
 // `@moleculer/database` hands a `$raw` value from a `query` (or a `filter`
 // object) straight to knex `whereRaw`, so a `$raw` may only ever be built by
 // server code. These keys are never copied from client params: `$raw` reaches
@@ -103,5 +105,8 @@ export function sanitizeClientParams<T>(value: T): T {
  * action call, and `req.$params` is exactly what the action receives.
  */
 export function stripClientRaw(_ctx: unknown, _route: unknown, req: any) {
-  if (req.$params) req.$params = sanitizeClientParams(req.$params);
+  if (!req.$params) return;
+  // Remember a raw query before it is stripped, so authorize can refuse the request (422).
+  if (hasRawQueryParams(req.$params)) req.$rawQueryParams = true;
+  req.$params = sanitizeClientParams(req.$params);
 }
