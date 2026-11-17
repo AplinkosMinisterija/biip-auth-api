@@ -12,6 +12,7 @@ import {
   COMMON_FIELDS,
   COMMON_SCOPES,
   EndpointType,
+  EvartaiProvider,
   FieldHookCallback,
   throwBadRequestError,
   throwNotFoundError,
@@ -220,9 +221,10 @@ export default class UsersEvartaiService extends moleculer.Service {
   @Action({
     params: {
       host: 'string',
+      provider: { type: 'enum', values: Object.values(EvartaiProvider), optional: true },
     },
   })
-  async sign(ctx: Context<{ host: string }, AppAuthMeta>) {
+  async sign(ctx: Context<{ host: string; provider?: EvartaiProvider }, AppAuthMeta>) {
     // `host` is where eVartai sends the user back (with the auth ticket in the
     // URL). An unvalidated host means the ticket can be delivered to an attacker
     // domain → account takeover. Restrict to the registered-app allow-list at
@@ -236,8 +238,14 @@ export default class UsersEvartaiService extends moleculer.Service {
       return throwBadRequestError('Invalid host');
     }
 
+    // eVartai only narrows the method list inside the signed ticket — its
+    // redirect takes nothing but `ticket` and `language`.
+    const providers = ctx.params.provider
+      ? `?providers=${encodeURIComponent(ctx.params.provider)}`
+      : '';
+
     try {
-      const response = await fetch(`${process.env.EVARTAI_HOST}/auth/sign`, {
+      const response = await fetch(`${process.env.EVARTAI_HOST}/auth/sign${providers}`, {
         method: 'POST',
         body: JSON.stringify({ host: ctx.params.host }),
       });
