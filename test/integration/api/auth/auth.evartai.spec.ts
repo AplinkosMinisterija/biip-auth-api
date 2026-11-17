@@ -62,6 +62,11 @@ const validateUserFields = (res: any, apiKey?: string, newUserData: any = {}) =>
   apiHelper;
 };
 
+const lastSignedProviders = () => {
+  const calls = (global.fetch as unknown as jest.Mock).mock.calls;
+  return calls[calls.length - 1][0];
+};
+
 describe("Test '/auth' endpoints", () => {
   beforeAll(() => initialize(broker));
   afterAll(() => broker.stop());
@@ -77,6 +82,44 @@ describe("Test '/auth' endpoints", () => {
         .expect((res: any) => {
           validationErrorValidateFields(res, ['host']);
         });
+    });
+
+    it('With an unsupported provider', () => {
+      return request(apiService.server)
+        .post(evartaiSignEndpoint)
+        .send({ host: apiHelper.appFishing.url, provider: 'AUTH_LT_BANK' })
+        .set(apiHelper.getHeaders())
+        .expect(422)
+        .expect((res: any) => {
+          validationErrorValidateFields(res, ['provider']);
+        });
+    });
+
+    it('Asks eVartai for the requested provider only', async () => {
+      apiHelper.interceptFetch({ ticket: 'ticket' });
+
+      await request(apiService.server)
+        .post(evartaiSignEndpoint)
+        .send({ host: apiHelper.appFishing.url, provider: 'AUTH_LT_GOVERNMENT_EMPLOYEE_CARD' })
+        .set(apiHelper.getHeaders())
+        .expect(200);
+
+      expect(lastSignedProviders()).toContain(
+        '/auth/sign?providers=AUTH_LT_GOVERNMENT_EMPLOYEE_CARD',
+      );
+    });
+
+    it('Asks eVartai for every provider when none is requested', async () => {
+      apiHelper.interceptFetch({ ticket: 'ticket' });
+
+      await request(apiService.server)
+        .post(evartaiSignEndpoint)
+        .send({ host: apiHelper.appFishing.url })
+        .set(apiHelper.getHeaders())
+        .expect(200);
+
+      expect(lastSignedProviders()).toContain('/auth/sign');
+      expect(lastSignedProviders()).not.toContain('providers');
     });
   });
 

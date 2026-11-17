@@ -38,6 +38,10 @@ export const RAW_CRUD_ACTIONS = ['create', 'update', 'remove', 'findOrCreate'];
 // Admin/super-admin local passwords must be rotated at least this often.
 export const PASSWORD_MAX_AGE_DAYS = 90;
 
+export enum EvartaiProvider {
+  GOVERNMENT_EMPLOYEE_CARD = 'AUTH_LT_GOVERNMENT_EMPLOYEE_CARD',
+}
+
 export function throwUnauthorizedError(message?: string, data?: any): Errors.MoleculerError {
   throw new Moleculer.Errors.MoleculerClientError(
     message || `Unauthorized.`,
