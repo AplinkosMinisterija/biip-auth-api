@@ -15,6 +15,8 @@ import {
   EvartaiProvider,
   FieldHookCallback,
   throwBadRequestError,
+  throwEvartaiTicketInvalidError,
+  throwEvartaiUnavailableError,
   throwNotFoundError,
 } from '../types';
 import { emailCanBeSent, normalizeName, sendEvartaiInvitationEmail } from '../utils';
@@ -28,14 +30,14 @@ import { User } from './users.service';
 interface UserEvartaiHelper {
   firstName?: string;
   lastName?: string;
-  personalCode: string;
+  personalCode?: string;
   companyCode?: string;
   email?: string;
   phone?: string;
   companyName?: string;
   companyEmail?: string;
   companyPhone?: string;
-  originalData?: { [key: string]: any };
+  originalData?: object;
 }
 
 export interface UserEvartai extends BaseModelInterface {
@@ -118,7 +120,7 @@ export default class UsersEvartaiService extends moleculer.Service {
     const appId = app.id;
 
     if (!personalCode) {
-      throwBadRequestError('Personal code is not defined', { userData, ticket });
+      throwBadRequestError('Personal code is not defined');
     }
 
     const company: Group = await this.getCompanyFromCode(userData.companyCode, {
@@ -709,16 +711,27 @@ export default class UsersEvartaiService extends moleculer.Service {
 
   @Method
   async getUserByTicket(ticket: string): Promise<UserEvartaiHelper> {
-    let userData: any;
-
+    let response: Response;
     try {
       const url = `${process.env.EVARTAI_HOST}/auth/data?ticket=${encodeURIComponent(ticket)}`;
-      userData = await fetch(url).then((r) => r.json());
-    } catch (err) {
-      throwBadRequestError('Cannot parse ticket', err);
+      response = await fetch(url);
+    } catch {
+      throwBadRequestError('Cannot parse ticket');
     }
 
-    if (!userData) return {} as UserEvartaiHelper;
+    if (!response.ok) {
+      // Helper error details can contain the ticket.
+      await response.json().catch(() => undefined);
+      // The helper answers 400 when VIISP rejects the ticket (invalid, expired,
+      // already used); anything else means the helper or VIISP itself failed.
+      if (response.status === 400) throwEvartaiTicketInvalidError();
+      throwEvartaiUnavailableError();
+    }
+
+    const userData: (UserEvartaiHelper & { phoneNumber?: string }) | null = await response
+      .json()
+      .catch(() => throwBadRequestError('Cannot parse ticket'));
+    if (!userData) return {};
 
     const user: UserEvartaiHelper = {
       firstName: userData.firstName,
