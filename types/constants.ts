@@ -62,12 +62,28 @@ export function throwValidationError(message?: string, data?: any): Errors.Molec
   );
 }
 
-export function throwBadRequestError(message?: string, data?: any): Errors.MoleculerError {
+export function throwBadRequestError(message?: string, data?: any): never {
   throw new Moleculer.Errors.MoleculerServerError(
     message || `Bad request.`,
     400,
     'BAD_REQUEST',
     data,
+  );
+}
+
+export function throwEvartaiTicketInvalidError(): never {
+  throw new Moleculer.Errors.MoleculerClientError(
+    'eVartai ticket is invalid, expired or already used',
+    400,
+    'EVARTAI_TICKET_INVALID',
+  );
+}
+
+export function throwEvartaiUnavailableError(): never {
+  throw new Moleculer.Errors.MoleculerServerError(
+    'eVartai authentication data could not be fetched',
+    502,
+    'EVARTAI_UNAVAILABLE',
   );
 }
 

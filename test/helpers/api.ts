@@ -125,7 +125,9 @@ export class ApiHelper {
     jest
       .spyOn(global, 'fetch')
       .mockImplementation(
-        jest.fn(() => Promise.resolve({ json: () => Promise.resolve(response) })) as jest.Mock,
+        jest.fn(() =>
+          Promise.resolve({ ok: true, json: () => Promise.resolve(response) }),
+        ) as jest.Mock,
       );
   }
 
