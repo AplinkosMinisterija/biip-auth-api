@@ -22,6 +22,7 @@ import {
   generateUUID,
   isPasswordExpired,
   sendUserInvitationEmail,
+  trySendEmail,
 } from '../utils';
 import { AppAuthMeta, AuthStrategy, UserAuthMeta } from './api.service';
 import { App } from './apps.service';
@@ -354,12 +355,20 @@ export default class UsersLocalService extends moleculer.Service {
         return { ...user, url };
       }
 
-      await sendUserInvitationEmail(user.email, {
-        invitationUrl: url,
-        inviter: meta?.user,
-        senderName: app.settings?.productName,
-        productName: app.settings?.productNameTo,
-      });
+      const sent = await trySendEmail(
+        () =>
+          sendUserInvitationEmail(user.email, {
+            invitationUrl: url,
+            inviter: meta?.user,
+            senderName: app.settings?.productName,
+            productName: app.settings?.productNameTo,
+          }),
+        { template: 'user-invitation' },
+      );
+
+      // The link is the only way into a local account, so hand it to the
+      // inviter rather than leaving the invitee unreachable.
+      if (!sent) return { ...user, url };
     }
 
     return user;
